@@ -43,3 +43,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# local logs
+*.log
+cfg.out
+cfg.err
