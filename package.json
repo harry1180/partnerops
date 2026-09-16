@@ -1,0 +1,16 @@
+{
+  "name": "cloud-partnerops",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm --filter @cloudpartnerops/web build",
+    "dev:web": "pnpm --filter @cloudpartnerops/web dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

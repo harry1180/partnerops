@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudpartnerops-api"
+version = "0.1.0"
+description = "Cloud PartnerOps — PartnerOps & cloud financial management platform API"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116",
+  "uvicorn[standard]>=0.34",
+  "sqlalchemy[asyncio]>=2.0.40",
+  "psycopg[binary]>=3.2",
+  "alembic>=1.16",
+  "pydantic>=2.11",
+  "pydantic-settings>=2.10",
+  "argon2-cffi>=23.1",
+  "redis>=6.2",
+  "celery>=5.5",
+  "structlog>=25.4",
+  "python-multipart>=0.0.20",
+  "boto3>=1.38",
+  "botocore>=1.38",
+  "reportlab>=4.4",
+  "prometheus-fastapi-instrumentator>=7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4",
+  "pytest-asyncio>=1.0",
+  "httpx>=0.28",
+  "ruff>=0.12",
+  "mypy>=1.16",
+  "hypothesis>=6.136",
+  "types-boto3>=1.38",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "workers*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"app/models/*" = ["E501"]
+"app/seed.py" = ["E501", "T201"]
+"app/api/v1/health_misc.py" = ["E501"]
+"app/db/money.py" = ["N802"]
+"app/engine/money.py" = ["N802"]
+"tests/*" = ["E501"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "T20"]
+ignore = ["A003", "B008", "SIM108", "E731"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "celery.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

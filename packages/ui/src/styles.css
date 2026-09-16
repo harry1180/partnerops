@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* ── Cloud PartnerOps design tokens ────────────────────────────────
+   Brand colors are runtime-injected from the branding API via CSS
+   custom properties (--brand-primary / --brand-accent). These static
+   defaults are the platform fallback.                                        */
+@theme {
+  --color-brand-primary: var(--brand-primary, #0f3d5c);
+  --color-brand-accent: var(--brand-accent, #c9a227);
+  --color-ink-950: #0a1520;
+  --color-ink-900: #10222f;
+  --color-ink-800: #1a3242;
+  --color-ink-700: #24455a;
+  --color-ink-500: #55748a;
+  --color-ink-400: #7d99ac;
+  --color-ink-300: #a8bccb;
+  --color-ink-200: #d3dfe7;
+  --color-ink-100: #e9eff4;
+  --color-ink-50: #f6f9fb;
+  --color-paper: #faf8f4;
+  --color-positive: #1c7c54;
+  --color-negative: #b3362c;
+  --color-warning: #a06a08;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink-950);
+}
+
+:root {
+  --brand-primary: #0f3d5c;
+  --brand-accent: #c9a227;
+}
+
+/* subtle executive-grade surfaces */
+.cpo-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-ink-200);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(16 34 47 / 0.05);
+}
+
+.cpo-focus:focus-visible {
+  outline: 2px solid var(--color-brand-accent);
+  outline-offset: 2px;
+}

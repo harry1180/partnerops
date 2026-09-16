@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: partnerops_migrate
+          POSTGRES_PASSWORD: cpo-pg-1
+          POSTGRES_DB: partnerops
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U partnerops_migrate" --health-interval 5s
+          --health-timeout 3s --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      APP_ENV: test
+      SECRET_KEY: ci-only-not-for-prod
+      DATABASE_URL: postgresql+psycopg://partnerops:cpo-app@localhost:5432/partnerops
+      DATABASE_URL_MIGRATE: postgresql+psycopg://partnerops_migrate:cpo-pg-1@localhost:5432/partnerops
+      CPO_TEST_PG_URL: postgresql+psycopg://partnerops:cpo-app@localhost:5432/partnerops
+      CPO_TEST_PG_OWNER_URL: postgresql+psycopg://partnerops_migrate:cpo-pg-1@localhost:5432/partnerops
+      REDIS_URL: redis://localhost:6379/0
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Bootstrap app role (mirrors infra/postgres/init.sql)
+        run: |
+          PGPASSWORD=cpo-pg-1 psql -h localhost -U partnerops_migrate -d postgres <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='partnerops') THEN
+              CREATE ROLE partnerops LOGIN PASSWORD 'cpo-app';
+            END IF;
+          END $$;
+          GRANT CONNECT ON DATABASE partnerops TO partnerops;
+          SQL
+          PGPASSWORD=cpo-pg-1 psql -h localhost -U partnerops_migrate -d partnerops <<'SQL'
+          GRANT USAGE ON SCHEMA public TO partnerops;
+          ALTER DEFAULT PRIVILEGES FOR ROLE partnerops_migrate IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO partnerops;
+          ALTER DEFAULT PRIVILEGES FOR ROLE partnerops_migrate IN SCHEMA public
+            GRANT USAGE ON SEQUENCES TO partnerops;
+          SQL
+      - run: uv venv --python 3.13 && uv pip install -e ".[dev]"
+      - name: Lint (ruff)
+        run: uv run ruff check app
+      - name: Type check (mypy)
+        run: uv run mypy app
+      - name: Migrations
+        run: uv run alembic upgrade head
+      - name: Seed
+        run: uv run python -m app.seed
+      - name: Tests (unit + API + RLS)
+        run: uv run pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm -r --if-present typecheck
+      - name: Unit tests
+        run: pnpm -r --if-present test
+      - name: Production build
+        run: pnpm --filter @cloudpartnerops/web build

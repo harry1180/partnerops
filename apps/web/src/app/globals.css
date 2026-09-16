@@ -1,0 +1,22 @@
+@import "@cloudpartnerops/ui/styles.css";
+
+/* app-level additions: scrollbars + print rules for report pages */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-200);
+  border-radius: 8px;
+}
+
+@media print {
+  nav,
+  header.cpo-chrome,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}
