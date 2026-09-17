@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "./cn";
 
 export function Modal({
@@ -27,7 +28,7 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  const overlay = (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-950/40 p-4 pt-16"
       role="dialog"
@@ -53,4 +54,7 @@ export function Modal({
       </div>
     </div>
   );
+  // Portal to <body>: a transformed ancestor (page animations) would otherwise
+  // re-anchor position:fixed and push footer buttons below the viewport.
+  return typeof document === "undefined" ? null : createPortal(overlay, document.body);
 }

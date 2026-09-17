@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useApp } from "@/lib/app-state";
 import { api } from "@/lib/api";
@@ -146,7 +146,10 @@ function CreateCustomerModal({
   onCreated: () => void | Promise<void>;
 }) {
   const partners = orgs.filter((o) => o.kind === "reseller" || o.kind === "distributor");
-  const [orgId, setOrgId] = useState(partners[0]?.id ?? "");
+  const [orgId, setOrgId] = useState("");
+  useEffect(() => {
+    if (!orgId && partners.length > 0) setOrgId(partners[0].id);
+  }, [partners, orgId]);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [email, setEmail] = useState("");

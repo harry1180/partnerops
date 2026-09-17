@@ -7,9 +7,12 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "build": "pnpm --filter @cloudpartnerops/web build",
-    "dev:web": "pnpm --filter @cloudpartnerops/web dev"
+    "dev:web": "pnpm --filter @cloudpartnerops/web dev",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }

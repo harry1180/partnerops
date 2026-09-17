@@ -1,9 +1,14 @@
-"""Rate limiter tests: memory fallback and the Redis async pipeline path."""
+"""Rate limiter tests: memory fallback and the Redis async pipeline path.
+
+The limit is read from settings (configurable), so the tests pin it via
+monkeypatch instead of assuming a number that env could change.
+"""
 
 from __future__ import annotations
 
 import pytest
 
+from app.core.config import get_settings
 from app.services import rate_limit
 
 
@@ -32,7 +37,8 @@ class FakeRedis:
 
 
 @pytest.mark.asyncio
-async def test_memory_limiter_blocks_over_limit():
+async def test_memory_limiter_blocks_over_limit(monkeypatch):
+    monkeypatch.setattr(get_settings(), "login_rate_limit_per_minute", 10)
     rate_limit.reset_memory_limiter()
     for _ in range(10):
         ok, _ = await rate_limit.allow_login_attempt(None, "1.2.3.4|a@b.com")
@@ -46,7 +52,8 @@ async def test_memory_limiter_blocks_over_limit():
 
 
 @pytest.mark.asyncio
-async def test_redis_pipeline_is_awaited_and_enforces():
+async def test_redis_pipeline_is_awaited_and_enforces(monkeypatch):
+    monkeypatch.setattr(get_settings(), "login_rate_limit_per_minute", 10)
     r = FakeRedis()
     for _ in range(10):
         ok, _ = await rate_limit.allow_login_attempt(r, "ip|user")

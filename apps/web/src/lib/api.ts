@@ -64,6 +64,9 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, json?: unknown) =>
     request<T>(path, { method: "POST", json: json ?? {} }),
+  postForm: <T>(path: string, form: URLSearchParams) =>
+    request<T>(path, { method: "POST", body: form.toString(),
+      headers: { "content-type": "application/x-www-form-urlencoded" } }),
   put: <T>(path: string, json?: unknown) => request<T>(path, { method: "PUT", json: json ?? {} }),
   patch: <T>(path: string, json?: unknown) =>
     request<T>(path, { method: "PATCH", json: json ?? {} }),

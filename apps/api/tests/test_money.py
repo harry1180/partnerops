@@ -3,7 +3,8 @@
 from decimal import Decimal
 
 import pytest
-from app.engine.money import D, ZERO, clamp_min_max, engine, pct_of, q
+
+from app.engine.money import ZERO, D, clamp_min_max, engine, pct_of, q
 
 
 def test_rejects_float_money():

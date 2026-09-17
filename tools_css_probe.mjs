@@ -1,0 +1,18 @@
+import { chromium } from "@playwright/test";
+const b = await chromium.launch();
+const p = await (await b.newContext()).newPage();
+const fails = [];
+p.on("requestfailed", (r) => fails.push(r.url()));
+const resp404 = [];
+p.on("response", (r) => { if (r.status() >= 400 && r.url().includes(".css")) resp404.push(r.url() + " " + r.status()); });
+await p.goto("http://localhost:3000/login", { waitUntil: "networkidle" });
+const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+const font = await p.evaluate(() => getComputedStyle(document.querySelector("h2") ?? document.body).fontFamily);
+const navCount = await p.evaluate(() => document.querySelectorAll("link[rel=stylesheet]").length);
+console.log("stylesheets in head:", navCount);
+console.log("body background:", bg);
+console.log("heading font:", font.slice(0, 60));
+console.log("css http errors:", JSON.stringify(resp404));
+console.log("failed requests:", JSON.stringify(fails));
+await p.screenshot({ path: "css_probe.png" });
+await b.close();

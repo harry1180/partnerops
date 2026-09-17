@@ -623,7 +623,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.ForeignKeyConstraint(['ingested_by'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('sha256', 'parser_version', name='uq_file_checksum_parser')
+    sa.UniqueConstraint('sha256', 'parser_version', 'org_path', name='uq_file_checksum_parser_org')
     )
     op.create_index(op.f('ix_raw_billing_files_org_id'), 'raw_billing_files', ['org_id'], unique=False)
     op.create_index(op.f('ix_raw_billing_files_org_path'), 'raw_billing_files', ['org_path'], unique=False)

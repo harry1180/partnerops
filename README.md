@@ -127,7 +127,7 @@ make up / make down # compose lifecycle
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 0 | Foundation: monorepo, compose, DB+RLS, auth/RBAC, tenant hierarchy, navigation, design system, logging, health, seed, CI | **Complete** |
-| 1 | Working AWS billing MVP: CUR import → canonical model → contracts → rules → pricing → invoices (PDF/CSV) → reconciliation → margins → audit → customer portal → e2e tests | Planned |
+| 1 | Working AWS billing MVP: CUR import → canonical model → contracts → rules → pricing → invoices (PDF/CSV) → reconciliation → margins → audit → customer portal → e2e tests | **Complete** (see docs/IMPLEMENTATION_STATUS.md) |
 | 2 | Advanced billing ops: tiers, commitments/credits allocation, maker-checker, notes, disputes, period close, leakage, scheduled reports, white-label | Planned |
 | 3 | Azure & multi-cloud adapter | Planned |
 | 4 | FinOps: budgets, forecasts, anomalies, optimization, governance | Planned |

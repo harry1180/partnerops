@@ -9,6 +9,7 @@ Demo users (documented in docs/demo-credentials.md):
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
@@ -160,6 +161,87 @@ async def seed() -> dict:
             session.add(u)
             await session.flush()
             session.add(UserRoleAssignment(user_id=u.id, role_id=role_objs[role_key].id, org_id=org_id))
+
+        # ---- Phase 1 billing entities (demo workspace) -----------------
+        from app.models.billing_core import (
+            AccountFamily,
+            CloudAccount,
+            CloudBillingAccount,
+            CloudProvider,
+            Customer,
+        )
+
+        session.add_all([
+            CloudProvider(code="aws", display_name="Amazon Web Services",
+                          adapter_key="synthetic_aws", status="available"),
+            CloudProvider(code="azure", display_name="Microsoft Azure",
+                          adapter_key="azure_cost_export", status="planned"),
+            CloudProvider(code="gcp", display_name="Google Cloud",
+                          adapter_key="gcp_billing", status="planned"),
+        ])
+
+        msp_nw_id = uuid.UUID("33333333-3333-4333-8333-333333333333")
+        msp_nw_path = "/" + "/".join([
+            str(PLATFORM_ID),
+            "22222222-2222-4222-8222-222222222222",
+            str(msp_nw_id),
+        ]) + "/"
+        msp_ca_id = uuid.UUID("33333333-3333-4333-8333-333333333334")
+        msp_ca_path = "/" + "/".join([
+            str(PLATFORM_ID),
+            "22222222-2222-4222-8222-222222222222",
+            str(msp_ca_id),
+        ]) + "/"
+        cust_specs = [
+            # (cust_org_id, parent_path, code, name, linked_accounts)
+            ("44444444-4444-4444-8444-444444444441", msp_nw_path, "ACME", "Acme Cloud Co",
+             ["111111111111", "222222222222"]),
+            ("44444444-4444-4444-8444-444444444442", msp_nw_path, "BLUR", "BlueRiver Systems",
+             ["333333333333"]),
+            ("44444444-4444-4444-8444-444444444443", msp_nw_path, "COBA", "Cobalt Labs",
+             ["444444444444"]),
+            ("44444444-4444-4444-8444-444444444445", msp_ca_path, "DELM", "Delta Manufacturing",
+             ["555555555555"]),
+            ("44444444-4444-4444-8444-444444444446", msp_ca_path, "EVRG", "Evergreen Retail", []),
+        ]
+        payer = CloudBillingAccount(
+            org_id=msp_nw_id, org_path=msp_nw_path, provider_code="aws",
+            external_id="777700000001", display_name="Northwind AWS Payer",
+            invoice_prefix="AWS", currency="USD",
+        )
+        session.add(payer)
+        await session.flush()
+        payer_id = payer.id
+
+        for cust_org_str, parent_path, code, name, linked in cust_specs:
+            cust_org_id = uuid.UUID(cust_org_str)
+            cust_path = f"{parent_path}{cust_org_id}/"
+            cust = Customer(
+                org_id=msp_nw_id if parent_path == msp_nw_path else msp_ca_id,
+                org_path=cust_path, code=code, display_name=name,
+                billing_email=f"billing@{code.lower()}.example.com",
+                target_margin_pct=Decimal("18.00") if code != "COBA" else Decimal("25.00"),
+            )
+            session.add(cust)
+            await session.flush()
+            fam = AccountFamily(
+                customer_id=cust.id, name="Primary Cloud Footprint",
+                description="All production and non-production cloud accounts",
+                org_id=cust.org_id, org_path=cust_path,
+            )
+            session.add(fam)
+            await session.flush()
+            for external in linked:
+                session.add(CloudAccount(
+                    provider_code="aws", external_id=external,
+                    display_name=f"AWS {external}",
+                    billing_account_id=payer_id, account_family_id=fam.id,
+                    allocation_status="mapped",
+                    org_id=cust.org_id, org_path=cust_path,
+                    account_kind="member",
+                ))
+        # one mapped-but-billing-orphan account under Cascade for future tests
+        await session.flush()
 
         # branding: platform root defaults
         await set_org_scope(session, "/")

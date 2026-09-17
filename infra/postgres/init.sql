@@ -24,3 +24,16 @@ ALTER DEFAULT PRIVILEGES FOR ROLE partnerops_migrate IN SCHEMA public
     GRANT USAGE ON SEQUENCES TO partnerops;
 
 GRANT USAGE ON SCHEMA public TO partnerops;
+
+-- Belt-and-braces: if tables ever exist before default privileges are set
+-- (e.g. a manual DROP SCHEMA recreate), grant them explicitly.
+DO $$
+DECLARE t record;
+BEGIN
+    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO partnerops', t.tablename);
+    END LOOP;
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO partnerops';
+    -- append-only audit and immutable financials are re-revoked by the migration
+END
+$$;

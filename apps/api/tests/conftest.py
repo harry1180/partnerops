@@ -55,7 +55,6 @@ def migrated_db():
 
         await seed_mod.seed()
 
-    import asyncio
 
     asyncio.run(_seed())
     yield

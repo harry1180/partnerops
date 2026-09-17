@@ -20,6 +20,7 @@ htmlcov/
 # node
 node_modules/
 .next/
+.next-build/
 out/
 dist/
 *.tsbuildinfo
@@ -27,8 +28,8 @@ dist/
 coverage/
 
 # playwright
-tests/e2e/test-results/
-tests/e2e/playwright-report/
+test-results/
+playwright-report/
 auth-screenshots/
 
 # data volumes / local storage

@@ -39,12 +39,22 @@ AUDIT_ACTIONS = (
     "approval.granted",
     "approval.denied",
     "reconciliation.waived",
+    "dispute.created",
+    "dispute.resolved",
     "export.data",
     "integration.changed",
     "period.closed",
     "tenant.scope_denied",
     "ai.query",
     "seed.demo_data",
+    "ingestion.file_parsed",
+    "ingestion.file_failed",
+    "pricing.started",
+    "pricing.completed",
+    "reconciliation.completed",
+    "reconciliation.exception_updated",
+    "account_family.created",
+    "cloud_account.mapped",
 )
 
 

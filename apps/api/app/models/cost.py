@@ -30,7 +30,10 @@ INGEST_SOURCES = ("synthetic", "aws_cur_s3", "aws_manual_upload", "azure_cost_ex
 
 class RawBillingFile(PkMixin, TimestampMixin, Base):
     __tablename__ = "raw_billing_files"
-    __table_args__ = (UniqueConstraint("sha256", "parser_version", name="uq_file_checksum_parser"),)
+    __table_args__ = (
+        UniqueConstraint("sha256", "parser_version", "org_path",
+                         name="uq_file_checksum_parser_org"),
+    )
 
     org_path: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
     org_id: Mapped[uuid.UUID] = mapped_column(index=True)

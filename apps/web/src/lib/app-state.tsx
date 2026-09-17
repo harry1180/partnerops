@@ -17,6 +17,7 @@ export interface NavEntry {
 
 export interface Capabilities {
   product_version: string;
+  current_phase: number;
   roles: string[];
   permissions: string[];
   navigation: NavEntry[];

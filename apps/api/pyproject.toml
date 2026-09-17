@@ -48,6 +48,7 @@ target-version = "py312"
 "app/models/*" = ["E501"]
 "app/seed.py" = ["E501", "T201"]
 "app/api/v1/health_misc.py" = ["E501"]
+"app/ingestion/synthetic_aws.py" = ["T201", "E501"]
 "app/db/money.py" = ["N802"]
 "app/engine/money.py" = ["N802"]
 "tests/*" = ["E501"]

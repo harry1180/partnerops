@@ -6,8 +6,9 @@ import { useApp, useBranding } from "@/lib/app-state";
 import { Spinner } from "@cloudpartnerops/ui";
 
 const GROUPS: Array<{ label: string | null; keys: string[] }> = [
-  { label: null, keys: ["overview"] },
-  { label: "Billing", keys: ["customers", "cloud_accounts", "contracts", "billing_rules", "commitments", "credits", "usage", "invoices", "reconciliation", "margins"] },
+  { label: null, keys: ["overview", "portal_overview"] },
+  { label: "Portal", keys: ["portal_usage", "portal_invoices"] },
+  { label: "Billing", keys: ["customers", "cloud_accounts", "contracts", "billing_rules", "commitments", "credits", "pricing", "usage", "invoices", "reconciliation", "margins"] },
   { label: "FinOps", keys: ["budgets", "optimization", "governance"] },
   { label: "Operations", keys: ["reports", "integrations", "audit", "administration"] },
 ];
@@ -65,18 +66,20 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
                 <ul className="space-y-0.5">
                   {items.map((item) => {
                     const active = pathname === item.href || pathname.startsWith(item.href + "/");
-                    const future = !item.granted;
+                    const future = !item.granted || item.available_from_phase > (capabilities.current_phase ?? 0);
                     return (
                       <li key={item.key}>
                         {future ? (
                           <span
-                            title={`Requires permission ${item.permission}`}
+                            title={item.granted
+                              ? "Not available in this release yet"
+                              : `Requires permission ${item.permission}`}
                             aria-disabled
                             className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-xs text-ink-500/60"
                           >
                             {item.label}
                             <span className="ml-auto rounded bg-ink-800 px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-400">
-                              Phase {item.available_from_phase}
+                              {item.granted ? "Coming later" : `Phase ${item.available_from_phase}`}
                             </span>
                           </span>
                         ) : (

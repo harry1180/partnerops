@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Tailwind v4 auto-detects sources from the app root; the shared component
+   library lives outside it. Declare it explicitly so utilities used only in
+   packages/ui (Modal's fixed/inset/z-index stack, etc.) are generated. */
+@source "./";
 
 /* ── Cloud PartnerOps design tokens ────────────────────────────────
    Brand colors are runtime-injected from the branding API via CSS
