@@ -166,3 +166,72 @@ def render_invoice_pdf(invoice: Invoice, customer: Customer,
 def _fmt_inv(inv: Invoice) -> str:
     return (f"{inv.invoice_number} · issued {inv.issued_at:%Y-%m-%d}"
             if inv.issued_at else f"{inv.invoice_number} · status {inv.status}")
+
+
+def render_note_pdf(note, invoice, customer, branding: dict | None = None) -> bytes:
+    """Credit/debit note document (same visual language as invoices)."""
+    b = branding or {}
+    product = str(b.get("product_name") or "Cloud PartnerOps")
+    accent = colors.HexColor(str(b.get("primary_color") or "#0F3D5C"))
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=LETTER, leftMargin=0.75 * inch, rightMargin=0.75 * inch,
+        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        title=f"{note.kind.capitalize()} Note {note.note_number}",
+    )
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1n", parent=styles["Title"], fontName="Times-Bold",
+                        fontSize=20, textColor=accent, spaceAfter=2)
+    meta = ParagraphStyle("metan", parent=styles["Normal"], fontSize=9,
+                          textColor=colors.HexColor("#555555"))
+    small = ParagraphStyle("smalln", parent=styles["Normal"], fontSize=8,
+                           textColor=colors.HexColor("#333333"))
+    story: list = [
+        Paragraph(product, h1),
+        Paragraph(f"{note.kind.capitalize()} Note", styles["Heading2"]),
+        Spacer(1, 10),
+    ]
+    info = [
+        [Paragraph("<b>Note</b>", small), note.note_number],
+        [Paragraph("<b>Corrects invoice</b>", small),
+         invoice.invoice_number if invoice else "—"],
+        [Paragraph("<b>Bill to</b>", small),
+         f"{customer.display_name}  ·  {customer.code}" if customer else "—"],
+        [Paragraph("<b>Status</b>", small), note.status],
+    ]
+    tbl = Table(info, colWidths=[1.6 * inch, 5.15 * inch])
+    tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 14))
+    data = [[Paragraph("<b>#</b>", styles["Normal"]),
+             Paragraph("<b>Description</b>", styles["Normal"]),
+             Paragraph("<b>Amount</b>", styles["Normal"])]]
+    for ln in note.lines:
+        data.append([str(ln.get("line_number", "")), str(ln.get("description", ""))[:160],
+                     _fmt(Decimal(str(ln.get("amount", "0"))))])
+    ltbl = Table(data, colWidths=[0.4 * inch, 4.7 * inch, 1.65 * inch], repeatRows=1)
+    ltbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EFEFEF")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("ALIGN", (2, 1), (2, -1), "RIGHT"),
+    ]))
+    story.append(ltbl)
+    story.append(Spacer(1, 12))
+    label = "Credit total" if note.kind == "credit" else "Debit total"
+    sdata = [[Paragraph(f"<b>{label}</b>", styles["Normal"]),
+              Paragraph(f"<b>{_fmt(note.amount)} {note.currency}</b>", styles["Normal"])]]
+    story.append(Table(sdata, colWidths=[3.6 * inch, 1.75 * inch], hAlign="RIGHT",
+                       style=TableStyle([("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                                         ("LINEABOVE", (0, 0), (-1, 0), 0.75, accent)])))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Reason", styles["Heading3"]))
+    story.append(Paragraph(note.reason[:1500], styles["Normal"]))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(
+        f"{product} · {note.note_number} · against "
+        f"{invoice.invoice_number if invoice else '—'} · status {note.status}", meta))
+    doc.build(story)
+    return buf.getvalue()

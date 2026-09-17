@@ -49,6 +49,7 @@ class BrandingUpdate(BaseModel):
     custom_domain: str | None = None
     terminology: dict | None = None
     feature_flags: dict | None = None
+    invoice_branding: dict | None = None
 
 
 async def _resolve_branding(session: SessionDep, org_path: str) -> BrandingConfig | None:

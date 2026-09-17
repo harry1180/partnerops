@@ -37,11 +37,21 @@ export default function PricingPage() {
     }).catch(() => setCustomers([]));
   }, []);
   useEffect(() => {
-    if (customerId) fetchContracts(customerId).then((cs) => {
-      setContracts(cs);
-      const active = cs.flatMap((c) => c.versions).find((v) => v.status === "active");
-      setVersionId(active?.id ?? "");
-    }).catch(() => setContracts([]));
+    if (!customerId) return;
+    // guard against out-of-order responses when the customer changes fast:
+    // a stale fetch must never re-populate the version select
+    let cancelled = false;
+    setContracts([]);
+    setVersionId("");
+    fetchContracts(customerId)
+      .then((cs) => {
+        if (cancelled) return;
+        setContracts(cs);
+        const active = cs.flatMap((c) => c.versions).find((v) => v.status === "active");
+        setVersionId(active?.id ?? "");
+      })
+      .catch(() => { if (!cancelled) setContracts([]); });
+    return () => { cancelled = true; };
   }, [customerId]);
 
   async function runPricing() {

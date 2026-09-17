@@ -249,3 +249,42 @@ async def test_full_billing_journey(client, migrated_db):
         inv = await s.get(Invoice, invoice_id)
         assert inv is not None
         assert Decimal(inv.margin_total) == Decimal(inv.total) - Decimal(inv.provider_cost_total)
+
+@pytest.mark.asyncio
+async def test_pricing_rejects_contract_from_other_customer(client, migrated_db):
+    """Regression: a stale UI selection must not price customer B under
+    customer A's contract (the Playwright step-7 500)."""
+    await _seed_workspace()
+    other_org = uuid.uuid4()
+    other_path = f"{ORG_PATH}{other_org}/"
+    async with SessionLocal() as s:
+        await set_org_scope(s, ROOT_PATH)
+        s.add(Organization(id=other_org, kind="customer", name="Other Co",
+                           path=other_path, currency="USD"))
+        cust_a = (await s.execute(select(Customer).where(Customer.code == "E2EAC"))).scalar_one()
+        cust_b = Customer(org_id=ORG, org_path=other_path, code="E2EOT",
+                          display_name="Other Co")
+        s.add(cust_b)
+        await s.flush()
+        contract = Contract(customer_id=cust_a.id, code="E2E-X", name="A-only",
+                            org_id=ORG, org_path=CUST_PATH, status="active")
+        s.add(contract)
+        await s.flush()
+        cv = ContractVersion(
+            contract_id=contract.id, version_number=1, status="active",
+            effective_start=datetime(2026, 6, 1, tzinfo=UTC),
+            currency="USD", org_id=ORG, org_path=CUST_PATH,
+        )
+        s.add(cv)
+        await s.commit()
+        b_id, cv_id = cust_b.id, cv.id
+
+    from app.services import pricing_service
+    with pytest.raises(ValueError, match="does not belong"):
+        async with SessionLocal() as s:
+            await pricing_service.run_pricing(
+                s, customer_id=b_id, contract_version_id=cv_id,
+                period_start=datetime(2026, 6, 1, tzinfo=UTC),
+                period_end=datetime(2026, 7, 1, tzinfo=UTC),
+                actor_user_id=uuid.uuid4(), correlation_id="regress",
+            )

@@ -60,6 +60,30 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
     ingestion, contract activation, publish, pricing run, every invoice
     state change, the dispute — append-only, correlation-ID'd.
 
+## Act 4b — Operations: maker-checker, notes, close, schedules
+
+11. **Approvals** (as Dana, the finance lead, *not* the rule's author): a
+    high-impact rule publish or period close appears in the queue. Approving
+    as a different person is what lets it through — the same person cannot
+    approve their own submission (409). Waiving a material exception requires
+    a reason code and is fully audited.
+12. **Invoice detail → Notes**: add a credit note to an *issued* invoice.
+    The invoice total corrects; the original stays immutable; the note links
+    back to the invoice with its own audit trail.
+13. **Period close**: close the customer's period — blocked while material
+    reconciliation exceptions are open; resolve or waive, then close. Reopen
+    keeps history.
+14. **Credits & Commitments**: provider credits, Savings Plans and RIs with
+    allocation policies, coverage/utilization computed from the same cost
+    rows as the dashboards. (Track & allocate only — the platform never
+    purchases or changes provider commitments.)
+15. **Reports**: five CSV reports, each download audited. Create a *schedule*
+    (monthly, day 17): the Celery beat pass generates the CSV into object
+    storage (sha256 recorded), queues an outbox notification, advances
+    `next_run_at`, and writes `report.schedule_ran` to the audit trail.
+16. **Administration → Branding**: change the partner's colors/name —
+    `branding.updated` is audited; the customer portal inherits it.
+
 ## The isolation punchline
 
 13. Sign in as **Casey Cascade** (`msp@cascade-it.example.com`, the other
@@ -70,5 +94,7 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
 ## Automation equivalents
 
 - Full API-level workflow: `apps/api` → `python tools/smoke_phase1_live.py`
+- Phase 2 ops workflow: `python tools/smoke_phase2_live.py` (notes, waiver →
+  approve → close, credits, commitments, leakage, report exports, branding)
 - Browser journey (this script as a test): `npx playwright test`
 - Golden numbers: `python -m pytest tests/test_golden_billing.py -q`

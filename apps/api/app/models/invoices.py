@@ -14,7 +14,7 @@ Numbers come from InvoiceSequence (configurable pattern per tenant).
 
 from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, OrgScopedMixin, PkMixin, SoftDeleteMixin, TimestampMixin
@@ -157,6 +157,28 @@ class ExportJob(PkMixin, TimestampMixin, OrgScopedMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     completed_at = mapped_column(DateTime(timezone=True), nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(32))
+
+
+class ReportSchedule(PkMixin, TimestampMixin, SoftDeleteMixin, OrgScopedMixin, Base):
+    """Scheduled report: a cadence over a report catalog key. The beat task
+    runs due schedules, stores the CSV in object storage and queues an email
+    through the notification outbox (transport is an integration boundary)."""
+
+    __tablename__ = "report_schedules"
+    __table_args__ = (UniqueConstraint("org_path", "name", name="uq_report_schedule_name"),)
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    report_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    cadence: Mapped[str] = mapped_column(String(16), nullable=False, default="monthly")  # monthly|weekly
+    day_of_month: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 1..28
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False, default=1)   # 0=Mon..6=Sun
+    hour_utc: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    recipients: Mapped[list[str]] = mapped_column(JSONVariant, nullable=False, default=list)
+    period_offset_months: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 1 = previous month
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by = mapped_column(ForeignKey("users.id"), nullable=True)
+    last_run_at = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
 
 class PeriodClose(PkMixin, TimestampMixin, OrgScopedMixin, Base):

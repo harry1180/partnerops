@@ -30,7 +30,7 @@ from app.db.rls import set_org_scope
 from app.engine.money import ZERO, q
 from app.engine.rules import CostSlice, EffectiveRule, apply_rules, invoice_level_adjustments
 from app.models.billing_core import Customer
-from app.models.contracts import BillingRule, BillingRuleVersion, ContractVersion
+from app.models.contracts import BillingRule, BillingRuleVersion, Contract, ContractVersion
 from app.models.cost import CanonicalCostRecord
 from app.models.pricing import PricingRun, PricingRunItem, PricingRunRuleSnapshot
 
@@ -78,6 +78,12 @@ async def run_pricing(
     customer = await session.get(Customer, customer_id)
     if customer is None:
         raise ValueError("customer not found")
+    # invariant: the contract version must belong to THIS customer. Without it
+    # a stale UI selection could price customer A under customer B's contract
+    # and write a run row RLS would reject (500) — or worse, misbill.
+    contract = await session.get(Contract, cv.contract_id)
+    if contract is None or contract.customer_id != customer.id:
+        raise ValueError("contract version does not belong to this customer")
 
     await set_org_scope(session, customer.org_path)
 

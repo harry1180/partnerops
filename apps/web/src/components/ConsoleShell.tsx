@@ -9,8 +9,9 @@ const GROUPS: Array<{ label: string | null; keys: string[] }> = [
   { label: null, keys: ["overview", "portal_overview"] },
   { label: "Portal", keys: ["portal_usage", "portal_invoices"] },
   { label: "Billing", keys: ["customers", "cloud_accounts", "contracts", "billing_rules", "commitments", "credits", "pricing", "usage", "invoices", "reconciliation", "margins"] },
+  { label: "Controls", keys: ["approvals", "reports"] },
   { label: "FinOps", keys: ["budgets", "optimization", "governance"] },
-  { label: "Operations", keys: ["reports", "integrations", "audit", "administration"] },
+  { label: "Operations", keys: ["integrations", "audit", "administration"] },
 ];
 
 export function ConsoleShell({ children }: { children: React.ReactNode }) {

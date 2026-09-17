@@ -40,5 +40,9 @@ celery_app.conf.update(
             "task": "app.tasks.billing.prune_sessions",
             "schedule": crontab(hour=3, minute=17),
         },
+        "scheduled-reports": {
+            "task": "app.tasks.reports.run_due_schedules",
+            "schedule": 900.0,  # every 15 minutes; due-checking is per schedule
+        },
     },
 )

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "@/lib/app-state";
 import { api } from "@/lib/api";
 import { fetchCatalog, fetchOrgs, fetchUsers, useAsync, type OrgNode, type UserRow } from "@/lib/hooks";
+import { fetchBrandingCurrent, updateBranding, type BrandingFull } from "@/lib/ops-api";
 import {
   Badge, Button, Card, CardBody, CardHeader, CardTitle, ErrorState, Field, Input, Modal,
   PageHeader, Select, Spinner, StatusPill, Table, Tabs, TBody, TD, TH, THead, TR,
@@ -12,6 +13,7 @@ import {
 export default function AdministrationPage() {
   const { me } = useApp();
   const canManage = (me?.permissions.includes("user.manage") ?? false) || (me?.roles.includes("platform_admin") ?? false);
+  const canBrand = me?.permissions.includes("branding.manage") ?? false;
 
   const tabs = [
     { key: "orgs", label: "Organizations", panel: <OrgTree /> },
@@ -22,6 +24,9 @@ export default function AdministrationPage() {
         ]
       : []),
     { key: "catalog", label: "Roles & permissions", panel: <CatalogPanel /> },
+    ...(canBrand
+      ? [{ key: "branding", label: "Branding & white label", panel: <BrandingPanel /> }]
+      : []),
   ];
 
   return (
@@ -323,5 +328,112 @@ function CatalogPanel() {
         </CardBody>
       </Card>
     </div>
+  );
+}
+
+
+function BrandingPanel() {
+  const [cfg, setCfg] = useState<BrandingFull | null>(null);
+  const [name, setName] = useState("");
+  const [primary, setPrimary] = useState("");
+  const [accent, setAccent] = useState("");
+  const [support, setSupport] = useState("");
+  const [sender, setSender] = useState("");
+  const [domain, setDomain] = useState("");
+  const [termInvoice, setTermInvoice] = useState("");
+  const [termCustomer, setTermCustomer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchBrandingCurrent().then((c) => {
+      setCfg(c); setName(c.product_name); setPrimary(c.primary_color); setAccent(c.accent_color);
+      setSupport(c.support_email ?? ""); setSender(c.email_sender_name ?? "");
+      setDomain(c.custom_domain ?? "");
+      setTermInvoice(c.terminology["invoice"] ?? "Invoice");
+      setTermCustomer(c.terminology["customer"] ?? "Customer");
+    }).catch((e) => setError(String(e?.message ?? e)));
+  }, []);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setMsg(null); setError(null);
+    try {
+      const updated = await updateBranding({
+        product_name: name, primary_color: primary, accent_color: accent,
+        support_email: support || null, email_sender_name: sender || null,
+        custom_domain: domain || null,
+        terminology: { invoice: termInvoice, customer: termCustomer },
+      });
+      setCfg(updated);
+      setMsg("Saved. The console, login page and invoice documents pick up the new branding immediately.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "save failed");
+    } finally { setBusy(false); }
+  }
+
+  if (!cfg) return error ? <ErrorState detail={error} /> : <Spinner label="Loading branding" />;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>White label</CardTitle>
+          <Badge tone="neutral">applies to your organization subtree</Badge>
+        </div>
+      </CardHeader>
+      <CardBody>
+        <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
+          <Field label="Product name" required>
+          { (id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} required minLength={2} /> }
+        </Field>
+          <Field label="Support email">
+          { (id) => <Input id={id} type="email" value={support} onChange={(e) => setSupport(e.target.value)} /> }
+        </Field>
+          <Field label="Primary color">
+          {(id) => (
+            <div className="flex items-center gap-2">
+              <input id={id} type="color" value={primary} onChange={(e) => setPrimary(e.target.value)}
+                     className="h-9 w-12 cursor-pointer rounded border border-ink-200 bg-white" aria-label="Primary color picker" />
+              <Input value={primary} onChange={(e) => setPrimary(e.target.value)} className="w-32 font-mono text-xs" aria-label="Primary color hex" />
+            </div>
+          )}
+        </Field>
+          <Field label="Accent color">
+          {(id) => (
+            <div className="flex items-center gap-2">
+              <input id={id} type="color" value={accent} onChange={(e) => setAccent(e.target.value)}
+                     className="h-9 w-12 cursor-pointer rounded border border-ink-200 bg-white" aria-label="Accent color picker" />
+              <Input value={accent} onChange={(e) => setAccent(e.target.value)} className="w-32 font-mono text-xs" aria-label="Accent color hex" />
+            </div>
+          )}
+        </Field>
+          <Field label="Email sender name">
+          { (id) => <Input id={id} value={sender} onChange={(e) => setSender(e.target.value)} /> }
+        </Field>
+          <Field label="Custom domain" hint="Routing/DNS configured by platform ops.">
+          { (id) => <Input id={id} value={domain} onChange={(e) => setDomain(e.target.value)} className="font-mono text-xs" placeholder="billing.customer.com" /> }
+        </Field>
+          <Field label='Term for "Invoice"' hint="Shown across UI and documents.">
+          { (id) => <Input id={id} value={termInvoice} onChange={(e) => setTermInvoice(e.target.value)} required /> }
+        </Field>
+          <Field label='Term for "Customer"'>
+          { (id) => <Input id={id} value={termCustomer} onChange={(e) => setTermCustomer(e.target.value)} required /> }
+        </Field>
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-3">
+              <Button type="submit" loading={busy}>Save branding</Button>
+              {msg && <span className="text-xs text-positive">{msg}</span>}
+              {error && <span role="alert" className="text-xs text-negative">{error}</span>}
+            </div>
+          </div>
+        </form>
+        <p className="mt-3 text-xs text-ink-400">
+          Logo upload and per-tenant invoice header configuration are available via the API
+          (POST /branding/logo, invoice_branding); UI for logo upload arrives with Phase 6 polish.
+        </p>
+      </CardBody>
+    </Card>
   );
 }

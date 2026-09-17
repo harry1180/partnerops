@@ -12,3 +12,8 @@
 | 0008 | [Idempotent, restartable ingestion with quarantine](0008-ingestion-idempotency.md) | Accepted (Phase 1 hardens) |
 | 0009 | [Scale by partition/rollup/jobs — not distributed infra](0009-scale-path.md) | Accepted |
 | 0010 | [Cookie sessions + CSRF first; Bearer tokens for machines](0010-auth-sessions.md) | Accepted |
+| 0011 | [Ingestion auto-discovers unknown accounts; mapping re-attributes cost rows](0011-account-discovery-and-reattribution.md) | Accepted |
+| 0012 | [Phase-gated navigation: no fake buttons, ever](0012-phase-gated-navigation.md) | Accepted |
+| 0013 | [Tailwind v4 needs a PostCSS pipeline under Next.js](0013-tailwind-postcss-nextjs.md) | Accepted |
+| 0014 | [Workers use bypass scope for cross-tenant due passes, then bind per-tenant scope](0014-worker-bypass-scope.md) | Accepted |
+| 0015 | [Validate cross-entity references in the service layer, not just the UI](0015-service-layer-reference-validation.md) | Accepted |

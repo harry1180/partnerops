@@ -13,7 +13,7 @@ settings = get_settings()
 
 # Deployment phase of the shipped code. The UI disables any nav entry whose
 # available_from_phase exceeds this — a page may only link when it exists.
-CURRENT_PHASE = 1
+CURRENT_PHASE = 2
 
 # Navigation manifest — the single source of truth for main-nav sections and
 # which permission gates each. The UI renders ONLY sections whose permission
@@ -25,8 +25,8 @@ NAVIGATION: list[dict] = [
     {"key": "cloud_accounts", "label": "Cloud Accounts", "href": "/cloud-accounts", "permission": "customer.read", "available_from_phase": 1},
     {"key": "contracts", "label": "Contracts", "href": "/contracts", "permission": "contract.read", "available_from_phase": 1},
     {"key": "billing_rules", "label": "Billing Rules", "href": "/billing-rules", "permission": "contract.read", "available_from_phase": 1},
-    {"key": "commitments", "label": "Commitments", "href": "/commitments", "permission": "contract.read", "available_from_phase": 2},
-    {"key": "credits", "label": "Credits & Discounts", "href": "/credits", "permission": "contract.read", "available_from_phase": 2},
+    {"key": "commitments", "label": "Commitments", "href": "/commitments", "permission": "customer.read", "available_from_phase": 2},
+    {"key": "credits", "label": "Credits & Discounts", "href": "/credits", "permission": "customer.read", "available_from_phase": 2},
     {"key": "pricing", "label": "Pricing Runs", "href": "/pricing", "permission": "pricing.run", "available_from_phase": 1},
     {"key": "usage", "label": "Usage Explorer", "href": "/usage", "permission": "cost.read", "available_from_phase": 1},
     {"key": "invoices", "label": "Invoices", "href": "/invoices", "permission": "invoice.read", "available_from_phase": 1},
@@ -35,7 +35,8 @@ NAVIGATION: list[dict] = [
     {"key": "budgets", "label": "Budgets & Anomalies", "href": "/budgets", "permission": "customer.read", "available_from_phase": 4},
     {"key": "optimization", "label": "Optimization", "href": "/optimization", "permission": "customer.read", "available_from_phase": 4},
     {"key": "governance", "label": "Governance", "href": "/governance", "permission": "customer.read", "available_from_phase": 4},
-    {"key": "reports", "label": "Reports", "href": "/reports", "permission": "report.read", "available_from_phase": 2},
+    {"key": "reports", "label": "Reports", "href": "/reports", "permission": "report.read", "available_from_phase": 2}
+    ,{"key": "approvals", "label": "Approvals", "href": "/approvals", "permission": "contract.approve", "available_from_phase": 2},
     {"key": "integrations", "label": "Integrations", "href": "/integrations", "permission": "integration.manage", "available_from_phase": 5},
     {"key": "audit", "label": "Audit Trail", "href": "/audit", "permission": "audit.read", "available_from_phase": 0},
     {"key": "administration", "label": "Administration", "href": "/admin", "permission": "user.manage", "available_from_phase": 0},

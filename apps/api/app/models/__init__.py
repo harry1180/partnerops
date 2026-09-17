@@ -58,6 +58,7 @@ from app.models.invoices import (  # noqa: F401
     InvoiceLine,
     InvoiceSequence,
     PeriodClose,
+    ReportSchedule,
 )
 from app.models.org import Organization  # noqa: F401
 from app.models.pricing import (  # noqa: F401

@@ -8,8 +8,10 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin,
+    approvals,
     audit,
     auth,
+    benefits_api,
     billing,
     branding,
     contracts,
@@ -17,8 +19,10 @@ from app.api.v1 import (
     extras,
     health_misc,
     margins,
+    ops,
     orgs,
     portal,
+    reports,
     users,
 )
 
@@ -31,6 +35,10 @@ api_router.include_router(billing.router, tags=["billing"])
 api_router.include_router(margins.router, tags=["margins"])
 api_router.include_router(portal.router, tags=["portal"])
 api_router.include_router(extras.router, tags=["billing-ops"])
+api_router.include_router(approvals.router, tags=["approvals"])
+api_router.include_router(ops.router, tags=["billing-ops"])
+api_router.include_router(benefits_api.router, tags=["benefits"])
+api_router.include_router(reports.router, tags=["reports"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(branding.router, prefix="/branding", tags=["branding"])
 api_router.include_router(audit.router, prefix="/audit-events", tags=["audit"])

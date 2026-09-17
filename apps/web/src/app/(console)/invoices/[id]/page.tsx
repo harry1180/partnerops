@@ -8,9 +8,10 @@ import {
   type InvoiceDetail,
 } from "@/lib/billing-api";
 import {
-  Badge, Button, Card, CardBody, CardHeader, CardTitle, ErrorState, Modal, MoneyCell,
-  PageHeader, Spinner, StatusPill, Table, TBody, TD, TH, THead, TR,
+  Badge, Button, Card, CardBody, CardHeader, CardTitle, ErrorState, Field, Input, Modal,
+  MoneyCell, PageHeader, Select, Spinner, StatusPill, Table, TBody, TD, TH, THead, TR, Textarea,
 } from "@cloudpartnerops/ui";
+import { createNote, fetchNotes, issueNote, noteDownloadUrl, type NoteRow } from "@/lib/ops-api";
 
 const NEXT_ACTIONS: Record<string, { to: string; label: string; permission: string; tone?: "primary" | "secondary" | "danger" }[]> = {
   calculated: [{ to: "under_review", label: "Send to review", permission: "invoice.write" }],
@@ -24,6 +25,7 @@ const NEXT_ACTIONS: Record<string, { to: string; label: string; permission: stri
     { to: "disputed", label: "Mark disputed", permission: "dispute.write" },
   ],
 };
+const NOTEABLE = ["issued", "exported", "paid_or_settled", "disputed"];
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,12 +35,15 @@ export default function InvoiceDetailPage() {
   const [busy, setBusy] = useState(false);
   const [lineageFor, setLineageFor] = useState<number | null>(null);
   const [lineage, setLineage] = useState<Awaited<ReturnType<typeof invoiceLineage>> | null>(null);
+  const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   const canSeeMargin = me?.permissions.includes("margin.view") ?? false;
 
   const load = useCallback(() => {
     setError(null);
     fetchInvoice(id).then(setInv).catch((e) => setError(String(e?.message ?? e)));
+    fetchNotes(id).then(setNotes).catch(() => setNotes([]));
   }, [id]);
   useEffect(load, [load]);
 
@@ -89,6 +94,11 @@ export default function InvoiceDetailPage() {
                   {a.label}
                 </Button>
               ))}
+            {(me?.permissions.includes("invoice.correct") && NOTEABLE.includes(inv.status)) && (
+              <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
+                Issue credit/debit note
+              </Button>
+            )}
             <StatusPill status={inv.status} />
           </div>
         }
@@ -127,6 +137,33 @@ export default function InvoiceDetailPage() {
           {canSeeMargin && inv.notes_internal && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-ink-600">Internal: {inv.notes_internal}</p>}
         </CardBody>
       </Card>
+
+      {notes.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Correction notes</CardTitle></CardHeader>
+          <CardBody className="p-0">
+            <Table>
+              <THead><TR><TH>Note</TH><TH>Kind</TH><TH>Reason</TH><TH className="text-right">Amount</TH><TH>Status</TH><TH /></TR></THead>
+              <TBody>
+                {notes.map((n) => (
+                  <TR key={n.id}>
+                    <TD className="font-mono text-xs">{n.note_number}</TD>
+                    <TD><Badge tone={n.kind === "credit" ? "info" : "warning"}>{n.kind}</Badge></TD>
+                    <TD className="max-w-xs truncate text-xs">{n.reason}</TD>
+                    <TD className="text-right text-xs"><MoneyCell value={n.amount} currency={n.currency} /></TD>
+                    <TD><StatusPill status={n.status} /></TD>
+                    <TD className="text-right">
+                      {n.status === "issued" && (
+                        <a href={noteDownloadUrl(n.id, "pdf")}><Button size="sm" variant="ghost">PDF</Button></a>
+                      )}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </CardBody>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader><CardTitle>Line items</CardTitle></CardHeader>
@@ -188,6 +225,91 @@ export default function InvoiceDetailPage() {
           )}
         </Modal>
       )}
+      {noteOpen && (
+        <NoteModal invoiceId={id} onClose={() => setNoteOpen(false)}
+                   onDone={() => { setNoteOpen(false); load(); }} />
+      )}
     </div>
+  );
+}
+
+function NoteModal({ invoiceId, onClose, onDone }: {
+  invoiceId: string; onClose: () => void; onDone: () => void;
+}) {
+  const [kind, setKind] = useState("credit");
+  const [description, setDescription] = useState("Corrected charge");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<"draft" | "issued">("draft");
+  const [noteId, setNoteId] = useState<string | null>(null);
+
+  async function draft() {
+    setBusy(true); setError(null);
+    try {
+      const n = await createNote({
+        invoice_id: invoiceId, kind,
+        lines: [{ description, amount }], reason,
+      });
+      setNoteId(n.id); setStep("issued");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "draft failed");
+    } finally { setBusy(false); }
+  }
+
+  async function issue() {
+    if (!noteId) return;
+    setBusy(true); setError(null);
+    try { await issueNote(noteId); onDone(); }
+    catch (e) { setError(e instanceof Error ? e.message : "issue failed"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Modal open title="Correction note" onClose={onClose}>
+      {step === "draft" ? (
+        <div className="space-y-4">
+          <p className="text-xs text-ink-500">
+            Issued invoices are immutable — corrections happen through linked credit (reduce) or debit
+            (increase) notes. Issuing the note moves this invoice to <b>corrected</b>.
+          </p>
+          <Field label="Direction">
+            {(id) => (
+              <Select id={id} value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="credit">Credit — reduce what the customer owes</option>
+                <option value="debit">Debit — increase what the customer owes</option>
+              </Select>
+            )}
+          </Field>
+          <Field label="Line description">
+          { (id) => <Input id={id} value={description} onChange={(e) => setDescription(e.target.value)} /> }
+        </Field>
+          <Field label="Amount" required>
+          { (id) => <Input id={id} value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="55.00" /> }
+        </Field>
+          <Field label="Reason (customer-visible)" required>
+            {(id) => <Textarea id={id} value={reason} onChange={(e) => setReason(e.target.value)} rows={2} minLength={4} />}
+          </Field>
+          {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-negative ring-1 ring-red-200">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button loading={busy} disabled={!amount || reason.trim().length < 4} onClick={() => void draft()}>
+              Draft note
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm">Note drafted. Issuing it is final: the note becomes immutable and the
+          invoice moves to <b>corrected</b>.</p>
+          {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-negative ring-1 ring-red-200">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Keep as draft</Button>
+            <Button loading={busy} onClick={() => void issue()}>Issue note</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }

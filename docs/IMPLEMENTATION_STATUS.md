@@ -71,22 +71,75 @@ synthetic AWS CUR → normalization → allocation → contracts → rules → p
 
 ### Known limitations at this gate (honest list)
 
-1. Maker-checker approval UI for high-impact rules is Phase 2 (API records
-   sandbox evidence; enforcement gate exists as data, not yet as a wall).
-2. Credit/debit notes & period-close endpoint: Phase 2 (immutability already
-   enforced; corrections currently = new pricing run + new draft invoice).
+1. Maker-checker enforcement: shipped in Phase 2 (high-impact rule publish
+   requires approval by a different person; waiver path audited).
+2. Credit/debit notes & period close: shipped in Phase 2 (issued invoices
+   stay immutable; corrections are linked notes).
 3. Tiered/minimum/maximum rules are implemented and tested but not yet
    exercised by the demo dataset's contract.
 4. Multi-currency: mismatched-currency rows are quarantined, not converted
-   (`currency_conversion` rule reserved for Phase 2).
+   (`currency_conversion` rule reserved for a later phase).
 5. Azure adapter: interface + planned provider row only (Phase 3).
 6. PDF invoices are generated with a minimal internal writer (no external
-   service); rich layout is Phase 2.
+   service); rich layout is a later phase.
 7. Windows dev quirks: run API via `run_server.py` (Selector loop); don't run
    `next build` while `next dev` shares `.next`.
 
-## Next: Phase 2 — Advanced billing operations
+## Phase 2 — Advanced billing operations (COMPLETE)
 
-Tiered demo contracts, commitment/credit allocation policies, maker-checker
-UI + enforcement, credit/debit notes, period closing, revenue-leakage alerts,
-scheduled reports, full white-label config UI.
+Shipped:
+
+- **Maker-checker approvals**: high-impact rule publishes and period-close
+  require approval by a *different* person; waiver path with reason codes,
+  fully audited (`approvals.waived`, `approval.requested/approved/denied`).
+  UI: Approvals queue.
+- **Credit/debit notes** on issued invoices (invoice total recomputed via
+  linked note; original stays immutable). UI on invoice detail.
+- **Period close**: per-customer close/open with material-exception gate
+  (waivable with audited reason).
+- **Credits & commitments**: track provider credits/Savings Plans/RIs,
+  allocation policies, coverage & utilization computed from canonical cost
+  rows. The platform never purchases or modifies provider commitments.
+- **Reports**: five on-demand CSV reports (margins, unbilled usage, credits,
+  commitment coverage, invoice summary) — same aggregations as the dashboards,
+  every download audited (`export.generated`).
+- **Scheduled reports**: monthly/weekly cadence, worker-generated CSVs stored
+  in object storage with sha256 lineage, `notification_outbox` entries (no
+  SMTP in local dev), audit (`report.schedule_ran`), Celery beat every 15 min.
+- **White-label config UI**: partner/child branding (colors, name, logo
+  upload) with `branding.updated` audit; portal inherits it.
+- **Revenue-leakage endpoint**: unbilled mapped spend + credit/commitment
+  coverage gaps in one view.
+
+Verification (2026-09-17):
+
+- `ruff` clean; `mypy app` clean (76 files); `pytest` **75 passed, 6 skipped**
+  (incl. 7 scheduled-report tests + pricing contract-mismatch regression);
+  PostgreSQL RLS suite **6 passed**.
+- Live smokes: `smoke_phase1_live.py` **SMOKE_OK** (25 steps),
+  `smoke_phase2_live.py` **SMOKE2_OK** (17 steps: notes, waiver→approve→close,
+  credits, commitments, leakage, report exports, branding).
+- Scheduled reports verified against live Postgres + MinIO: due schedule →
+  7-row CSV stored, sha256 recorded, outbox entry created, `next_run_at`
+  advanced, audit written.
+- Playwright journey **13 passed, 1 skipped** (AI-assistant step, Phase 5).
+- `pnpm typecheck` 0 errors; vitest 8 passed; `next build` clean.
+
+### Phase 2 bug class fixed along the way
+
+- **Stale async select race** (Playwright step 7 → 500): the pricing page's
+  contract fetch could land out of order and keep the previous customer's
+  contract version selected; the pricing service then wrote a run row whose
+  org_path (taken from the contract) failed RLS. Fixed on both sides: the UI
+  cancels stale fetches, and `run_pricing` rejects a contract version that
+  doesn't belong to the customer with a clean 409. Regression test added.
+- **RLS deny-all for workers**: `run_due_schedules` initially saw zero rows
+  because it queried before binding any org scope. Workers now use the
+  documented bypass scope for the cross-tenant due pass, then bind each
+  schedule's own org scope for generation (same pattern as the seed script).
+
+## Next: Phase 3 — Multi-cloud ingestion
+
+Azure Cost Management + GCP Billing BigQuery adapters behind the same
+ingestion contract, connector scheduling, file-format fuzz tests, provider
+bill totals reconciliation per account.
