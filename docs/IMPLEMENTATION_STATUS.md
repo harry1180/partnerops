@@ -1,7 +1,7 @@
 # Implementation Status
 
 Working source of truth for what is verified. Updated at every phase gate.
-Last update: Phase 4 — **complete** (see docs/reports/phase-4-report.md).
+Last update: Phase 5 — **complete** (see docs/reports/phase-5-report.md).
 
 ## Phase 0 — Foundation ✅ COMPLETE
 
@@ -215,9 +215,51 @@ Verification (2026-09-18):
 - Web: typecheck 0; vitest 8; `next build` clean; headless probe: all five
   new pages render with data, 0 page errors.
 
-## Next: Phase 5 — AI assistant & integrations
+## Phase 5 — AI assistant & integrations (COMPLETE)
 
-Permission-aware assistant (deterministic demo mode, cited internal records,
-read-only tools, audit of sensitive queries), scoped API tokens + rotation,
-signed webhooks, ERP export formats, notification delivery behind the
-existing outbox, Integrations admin page.
+Shipped:
+
+- **Assistant (deterministic retrieval, ADR-0018)**: 10 read-only tools
+  behind an intent router (invoice change drivers, rules-on-invoice,
+  lineage, margin-below-target, unbilled accounts, unallocated credits,
+  recon difference, verified savings, anomaly summary, customer-safe
+  drafts). Facts vs estimates separated; every answer cites record ids;
+  unmatched questions refused with a reason. No LLM in the path —
+  `mode=deterministic_demo` labeled in API/UI/audit.
+- **Audit**: every query (incl. refusals) → `AIQueryAudit`; sensitive
+  intents → additional `audit_events`; `/assistant/audit` for auditors
+  (403 for portal users). Console `/assistant` + portal `/portal/assistant`
+  (own-scope answers only; partner intents refused).
+- **Webhooks**: HMAC-SHA256 signed deliveries (`X-CPPartnerOps-Signature`
+  over `timestamp.body`, Idempotency-Key), secret shown once then masked,
+  retry-capped beat sweep (5 min) + manual sweep endpoint, SSRF validation
+  (metadata always refused; private only in local/test). Real events:
+  `invoice.issued`, `dispute.created`, `report.ready`, `integration.test`;
+  ancestor-chain endpoint matching with per-caller RLS scope.
+- **Email transport**: outbox flush → `logs/notifications.ndjson` (working
+  local transport, same seam as SMTP adapters in deployments).
+- **ERP export**: `GET /invoices/{id}/export?fmt=json|csv` — `cpo.erp.v1`
+  journal doc, customer-visible lines only (provider cost/margin/internal
+  notes structurally excluded), audited + ExportJob. Buttons on invoice page.
+- **Integrations page**: endpoints + test-send + deliveries, honest external-
+  system registry (`connected` only from real checks), API-token guidance.
+- Live fixes: bearer-token expiry naive-datetime 500 (deps.py), global-sweep
+  head-of-line blocking on test-send, queue_event ancestor matching.
+
+Verification:
+
+- `ruff`/`mypy` clean (96 files); `pytest` **125 passed** (new
+  `test_phase5.py` ×10 incl. receiver-side HMAC verification against a real
+  local HTTP listener).
+- `smoke_phase5_live.py` **SMOKE5_OK** (15 steps, re-runnable). Smokes 1–4
+  re-passed (25/17/22/24).
+- Playwright journey **18 passed, 0 skipped** — assistant/ERP/webhook legs
+  (12, 12b, 12c) now real; ran twice consecutively.
+- Web: typecheck 0; vitest 8; `next build` clean (assistant, integrations,
+  portal/assistant prerender).
+
+## Next: Phase 6 — hardening & deployment
+
+Auth hardening (SSO/OIDC seam), KMS secret refs, DNS-pinned egress, load/
+scale passes, backup/restore drills, staging deploy. (Remaining charter
+scope after Phase 6 = polish; see charter phase table.)

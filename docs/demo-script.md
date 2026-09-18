@@ -97,7 +97,7 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
     each showing mode (`synthetic fixtures`), cadence, last real ingestion
     (backed by an actual file row), next-due timestamp, and Run now. The
     "(no live pull)" label is the honesty marker: live credential fetching
-    is Phase 5; nothing here pretends to reach a cloud.
+    is deployment config (Phase 6); nothing here pretends to reach a cloud.
 19. **BlueRiver invoice → lineage**: one customer invoice mixes EC2 and
     Azure VM charges; the lineage view traces each line back to source
     records in *both* provider files.
@@ -121,6 +121,28 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
     portal shows only their own caps vs their own charges; no margin, no
     provider internals (asserted in the smoke + journey).
 
+## Act 4e — Assistant & integrations (Phase 5)
+
+23. **Assistant** (`/assistant`, as the MSP): ask *"Which credits have not
+    been allocated?"* — a computed answer with a citation chip per credit
+    row. Ask something off-domain (*"weather in paris"*) — it refuses with
+    a reason instead of inventing. The `deterministic_demo` badge and the
+    ground-rules card are the honesty markers: no model generated this.
+    The **AI query audit** table at the bottom shows both the answer and
+    the refusal, with intent, tools, and latency.
+24. **Portal assistant** (as Acme admin, `/portal/assistant`): the same
+    margin question a partner asked is *refused* — permission-aware, not
+    just scope-aware. Their own anomaly summary answers from their rows only.
+25. **Integrations** (`/integrations`): add a webhook endpoint (the signing
+    secret appears exactly once); **Send test** → the delivery row shows
+    the real outcome (200 if you point it at any local listener; the
+    signature is a verifiable HMAC). Trigger a real event: issue an
+    invoice → the `invoice.issued` delivery lands signed.
+26. **ERP export** (issued invoice page): **ERP JSON** downloads
+    `cpo.erp.v1` — header, PO reference, totals, customer-visible lines.
+    Grep it: no provider cost, no margin, no internal notes. The audit
+    trail records `export.generated`.
+
 ## The isolation punchline
 
 13. Sign in as **Casey Cascade** (`msp@cascade-it.example.com`, the other
@@ -139,5 +161,9 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
 - Phase 4 FinOps workflow: `python tools/smoke_phase4_live.py` (budgets +
   variance, anomaly pass + review, recommendation decision flow, forecast,
   governance evaluate + exceptions, portal scoping)
+- Phase 5 assistant/integrations workflow: `python tools/smoke_phase5_live.py`
+  (cited answers + honest refusals + AI audit, webhook secret-once,
+  receiver-side HMAC verification against a real listener, ERP export
+  leak-checks, scoped Bearer token, portal assistant boundary)
 - Browser journey (this script as a test): `npx playwright test`
 - Golden numbers: `python -m pytest tests/test_golden_billing.py -q`

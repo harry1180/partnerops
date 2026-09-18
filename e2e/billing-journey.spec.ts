@@ -12,7 +12,9 @@
  *  9. Reconcile against the provider bill        (UI)
  * 10. Margins dashboard shows the customer       (UI)
  * 11. Customer portal: see invoice, file dispute (UI, provisioned user)
- * 12. Assistant question about invoice change    (Phase 5 — honestly skipped)
+ * 12. Assistant answers + refusal + AI audit     (UI)
+ * 12b. ERP export of issued invoice (API fetch)  (UI+API)
+ * 12c. Integrations: webhook create/test/deliver (UI)
  * 13. Another tenant cannot access the data      (API 404 + auditor evidence)
  *
  * Requires: API on :8001 (docker postgres seeded), web on :3000.
@@ -285,8 +287,56 @@ test.describe("partner billing journey", () => {
     expect(disputes.items.some((d) => d.subject === "E2E test dispute")).toBeTruthy();
   });
 
-  test("12. Assistant question about invoice change — Phase 5", () => {
-    test.skip(true, "AI PartnerOps assistant ships in Phase 5; no fake answer is wired here.");
+  test("12. Assistant answers from records, refuses off-domain, auditable", async ({ page }) => {
+    await uiLogin(page, "msp@northwind-msp.example.com");
+    await page.goto(`${WEB}/assistant`);
+    await expect(page.getByRole("button", { name: "Ask" })).toBeVisible({ timeout: 15_000 });
+    // deterministic answer: unallocated credits (text computed from rows)
+    await page.getByRole("button", { name: "Which credits have not been allocated?" }).click();
+    await expect(page.getByText("unallocated_credits").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/await\(s\) allocation|credits await/i).first()).toBeVisible();
+    // off-domain question is refused with a reason, never invented
+    await page.getByLabel("Question").fill("what is the weather in paris");
+    await page.getByRole("button", { name: "Ask" }).click();
+    await expect(page.getByText(/Refused —/).first()).toBeVisible({ timeout: 20_000 });
+    // both queries in the AI audit table on the same page
+    await expect(page.getByText("AI query audit").first()).toBeVisible();
+    const auditRows = page.locator("tbody tr");
+    await expect(auditRows.filter({ hasText: "weather in paris" }).first()).toBeVisible();
+    await expect(auditRows.filter({ hasText: "answered" }).first()).toBeVisible();
+  });
+
+  test("12b. ERP export on the issued invoice (json), no partner fields", async ({ page }) => {
+    test.skip(!invoiceId, "invoice step failed");
+    await uiLogin(page, "msp@northwind-msp.example.com");
+    await page.goto(`${WEB}/invoices/${invoiceId}`);
+    await expect(page.getByRole("button", { name: "ERP JSON" })).toBeVisible({ timeout: 15_000 });
+    const res = await page.request.get(
+      `${WEB}/api-backend/api/v1/invoices/${invoiceId}/export?fmt=json`);
+    expect(res.ok()).toBeTruthy();
+    const doc = await res.json();
+    expect(doc.schema).toBe("cpo.erp.v1");
+    expect(JSON.stringify(doc)).not.toMatch(/provider_cost|margin|internal_note/i);
+  });
+
+  test("12c. Integrations: create webhook, test-send shows delivery outcome", async ({ page }) => {
+    await uiLogin(page, "msp@northwind-msp.example.com");
+    await page.goto(`${WEB}/integrations`);
+    await page.getByRole("button", { name: "Add endpoint" }).click();
+    const closedPort = 59 + (process.pid % 40000); // almost certainly refused
+    await page.getByLabel("Target URL").fill(`http://127.0.0.1:${closedPort}/hook`);
+    await page.getByRole("button", { name: "Create" }).click();
+    // one-shot secret appears; endpoint row shows up
+    await expect(page.getByText("Signing secret — shown once")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Copy" }).click();
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await expect(page.getByRole("button", { name: "Send test" }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Send test" }).first().click();
+    await expect(page.getByText(/Test: queued \d+, attempted \d+/)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Deliveries" }).first().click();
+    await expect(page.getByText("Recent deliveries")).toBeVisible();
+    await expect(page.locator("tbody tr").filter({ hasText: /failed|pending/ }).first())
+      .toBeVisible({ timeout: 15_000 });
   });
 });
 

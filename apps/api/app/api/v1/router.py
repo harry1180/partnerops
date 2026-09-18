@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     admin,
     approvals,
+    assistant_api,
     audit,
     auth,
     benefits_api,
@@ -21,6 +22,7 @@ from app.api.v1 import (
     finops,
     governance,
     health_misc,
+    integrations,
     margins,
     ops,
     orgs,
@@ -50,3 +52,5 @@ api_router.include_router(branding.router, prefix="/branding", tags=["branding"]
 api_router.include_router(audit.router, prefix="/audit-events", tags=["audit"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(health_misc.router, tags=["meta"])
+api_router.include_router(assistant_api.router, tags=["assistant"])
+api_router.include_router(integrations.router, tags=["integrations"])

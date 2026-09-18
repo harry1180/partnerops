@@ -150,9 +150,16 @@ async def main() -> int:
                                "expires_at": "2027-01-01T00:00:00+00:00"}, headers=csrf)
         step("exception granted", r.status_code == 201)
 
-        # 7. audit trail covers phase-4 actions
-        r = await c.get("/api/v1/audit-events?page=1&page_size=200", headers=csrf)
-        actions = {e["action"] for e in r.json()["items"]}
+        # 7. audit trail covers phase-4 actions (per-action filter: volume of
+        # other events must not push them out of a page window)
+        actions = set()
+        for a in ("budget.created", "anomaly.pass_ran", "anomaly.reviewed",
+                  "recommendation.decided", "governance.evaluated",
+                  "governance.exception_granted"):
+            ra = await c.get("/api/v1/audit-events", params={"action": a, "page_size": 1},
+                             headers=csrf)
+            if ra.json()["items"]:
+                actions.add(a)
         need = {"budget.created", "anomaly.pass_ran", "anomaly.reviewed",
                 "recommendation.decided", "governance.evaluated",
                 "governance.exception_granted"}

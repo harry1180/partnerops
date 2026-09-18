@@ -89,6 +89,19 @@ def _to_out(cfg: BrandingConfig) -> BrandingOut:
 async def current_branding(session: SessionDep, principal: Principal):
     cfg = await _resolve_branding(session, principal.org_path)
     if cfg is None:
+        # Tenant RLS scope can't see the platform-root row; fall back to a
+        # root-scoped read of exactly that row (same access as /branding/public).
+        from app.core.db import SessionLocal
+
+        async with SessionLocal() as s2:
+            await set_org_scope(s2, "/")
+            cfg = (await s2.execute(
+                select(BrandingConfig)
+                .where(BrandingConfig.org_path == "/",
+                       BrandingConfig.deleted_at.is_(None))
+                .limit(1)
+            )).scalar_one_or_none()
+    if cfg is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail={"code": "no_branding"})
     return _to_out(cfg)
 

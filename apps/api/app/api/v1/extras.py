@@ -191,6 +191,13 @@ async def create_dispute(body: DisputeCreate, session: SessionDep, principal: Pr
     await record_audit(session, principal, action="dispute.created", org_path=inv.org_path,
                        summary=f"Dispute '{body.subject}' filed for invoice {inv.invoice_number}",
                        entity_type="dispute", entity_id=d.id)
+    await session.flush()  # materialize dispute id for the event payload
+    from app.services.webhooks import queue_event
+    await queue_event(session, inv.org_path, "dispute.created", {
+        "dispute_id": str(d.id), "dispute_number": d.dispute_number,
+        "invoice_id": str(inv.id), "invoice_number": inv.invoice_number,
+        "subject": body.subject, "amount_disputed": str(d.amount_disputed or 0),
+    }, scope=principal.scope_prefixes[0])
     await session.commit()
     return {"id": str(d.id), "dispute_number": d.dispute_number, "status": d.status}
 

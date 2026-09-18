@@ -145,8 +145,11 @@ by the Azure demo seed.
 same RLS subtree policy; anomaly/recommendation/finding rows carry evidence
 JSON and dedupe keys for idempotent re-runs.
 
-## Phase 5+ additions (planned, not yet created)
+## Phase 5 additions (shipped) & remaining
 
-`AiQueryAudit` exists from Phase 0 (assistant itself is Phase 5); budgets/
-anomalies/optimizer tables above are live. Remaining planned: provider-config
-governance connectors, ERP export job types.
+`ai_query_audit`, `webhook_endpoints`, `webhook_deliveries`,
+`notification_outbox`, `integrations`, `export_jobs` — all live since
+Phase 0 schemas, all now exercised end-to-end (assistant answers + signed
+webhook deliveries + ERP `cpo.erp.v1` exports, Phase 5). Remaining
+planned: provider-config governance connectors, marketplace invoice-sync
+tables (Phase 6+).

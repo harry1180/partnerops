@@ -104,6 +104,15 @@ async def transition_invoice(
         entity_type="invoice", entity_id=invoice.id,
         detail={"from": frm, "to": to_status, "note": note},
     )
+    if to_status == "issued":
+        from app.services.webhooks import queue_event
+        await queue_event(session, invoice.org_path, "invoice.issued", {
+            "invoice_id": str(invoice.id), "invoice_number": invoice.invoice_number,
+            "customer_id": str(invoice.customer_id), "total": str(invoice.total),
+            "currency": invoice.currency,
+            "period_start": invoice.period_start.isoformat(),
+            "issued_at": invoice.issued_at.isoformat() if invoice.issued_at else None,
+        }, scope=principal.scope_prefixes[0])
     return invoice
 
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -78,7 +79,12 @@ async def _principal_from_api_token(request: Request, session: AsyncSession) -> 
         ApiToken.revoked_at.is_(None),
     )
     api_token = (await session.execute(stmt)).scalar_one_or_none()
-    if api_token is None or (api_token.expires_at and api_token.expires_at < now_utc()):
+    if api_token is None:
+        return None
+    exp = api_token.expires_at
+    if exp is not None and exp.tzinfo is None:  # SQLite returns naive timestamps
+        exp = exp.replace(tzinfo=UTC)
+    if exp is not None and exp < now_utc():
         return None
     user = await session.get(User, api_token.created_by) if api_token.created_by else None
     if user is None:

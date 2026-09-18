@@ -12,6 +12,7 @@ import {
   MoneyCell, PageHeader, Select, Spinner, StatusPill, Table, TBody, TD, TH, THead, TR, Textarea,
 } from "@cloudpartnerops/ui";
 import { createNote, fetchNotes, issueNote, noteDownloadUrl, type NoteRow } from "@/lib/ops-api";
+import { erpExportUrl } from "@/lib/integrations-api";
 
 const NEXT_ACTIONS: Record<string, { to: string; label: string; permission: string; tone?: "primary" | "secondary" | "danger" }[]> = {
   calculated: [{ to: "under_review", label: "Send to review", permission: "invoice.write" }],
@@ -85,6 +86,12 @@ export default function InvoiceDetailPage() {
           <div className="flex flex-wrap gap-2">
             <a href={billingDocUrl(id, "pdf")}><Button variant="secondary" size="sm">Download PDF</Button></a>
             <a href={billingDocUrl(id, "csv")}><Button variant="secondary" size="sm">Download CSV</Button></a>
+            {me?.permissions.includes("export.data") && (
+              <>
+                <a href={erpExportUrl(id, "json")}><Button variant="secondary" size="sm">ERP JSON</Button></a>
+                <a href={erpExportUrl(id, "csv")}><Button variant="secondary" size="sm">ERP CSV</Button></a>
+              </>
+            )}
             {actions
               .filter((a) => me?.permissions.includes(a.permission))
               .map((a) => (

@@ -32,9 +32,9 @@ Invariants enforced by the service, not the adapters:
 ## AWS (`aws`, parser v1)
 
 `SyntheticAwsAdapter` parses our clean-room CUR-shaped interchange
-(`fixtures/aws/<payer>/<period>.csv`, generator: `app/ingestion/synthetic_aws.py`).
+(`fixtures/aws/<payer>/<period>.csv`, generator: `app.ingestion.synthetic_aws.py`).
 A real CUR-on-S3 adapter is a format swap behind the same contract; live
-credentials are a Phase 5 integration.
+credentials land with deployment config (Phase 6 hardening).
 
 ## Azure (`azure`, parser v1) — Phase 3
 
@@ -70,7 +70,7 @@ the UI renders "(no live pull)" — a connector "Run now" ingests the real
 fixture file through the same `ingest_csv` path as a manual upload.
 
 Live connectors (AWS CUR on S3, Azure Cost Management exports via OIDC/role)
-replace the source, never the accounting: see Phase 5 integrations.
+replace the source, never the accounting: the signing/transport layer shipped in Phase 5.
 
 ## GCP
 

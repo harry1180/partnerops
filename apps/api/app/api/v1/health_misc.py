@@ -13,7 +13,7 @@ settings = get_settings()
 
 # Deployment phase of the shipped code. The UI disables any nav entry whose
 # available_from_phase exceeds this — a page may only link when it exists.
-CURRENT_PHASE = 4
+CURRENT_PHASE = 5
 
 # Navigation manifest — the single source of truth for main-nav sections and
 # which permission gates each. The UI renders ONLY sections whose permission
@@ -38,6 +38,7 @@ NAVIGATION: list[dict] = [
     {"key": "reports", "label": "Reports", "href": "/reports", "permission": "report.read", "available_from_phase": 2}
     ,{"key": "approvals", "label": "Approvals", "href": "/approvals", "permission": "contract.approve", "available_from_phase": 2},
     {"key": "integrations", "label": "Integrations", "href": "/integrations", "permission": "integration.manage", "available_from_phase": 5},
+    {"key": "assistant", "label": "Assistant", "href": "/assistant", "permission": "assistant.ask", "available_from_phase": 5},
     {"key": "audit", "label": "Audit Trail", "href": "/audit", "permission": "audit.read", "available_from_phase": 0},
     {"key": "administration", "label": "Administration", "href": "/admin", "permission": "user.manage", "available_from_phase": 0},
 ]
@@ -49,6 +50,7 @@ PORTAL_NAVIGATION: list[dict] = [
     {"key": "portal_invoices", "label": "Invoices", "href": "/portal/invoices", "permission": "invoice.read", "available_from_phase": 1},
     {"key": "portal_budgets", "label": "Budgets", "href": "/portal/budgets", "permission": "customer.read", "available_from_phase": 4},
     {"key": "portal_anomalies", "label": "Cost Changes", "href": "/portal/anomalies", "permission": "customer.read", "available_from_phase": 4},
+    {"key": "portal_assistant", "label": "Assistant", "href": "/portal/assistant", "permission": "assistant.ask", "available_from_phase": 5},
 ]
 
 

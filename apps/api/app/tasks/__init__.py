@@ -19,7 +19,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.database_url.replace("postgresql+psycopg", "db+postgresql+psycopg"),
     include=["app.tasks.billing", "app.tasks.ingestion", "app.tasks.reports",
-             "app.tasks.connectors", "app.tasks.finops"],
+             "app.tasks.connectors", "app.tasks.finops", "app.tasks.integrations"],
 )
 
 celery_app.conf.update(
@@ -52,6 +52,10 @@ celery_app.conf.update(
         "nightly-finops-passes": {
             "task": "app.tasks.finops.run_finops_passes",
             "schedule": crontab(hour=3, minute=40),
+        },
+        "integrations-sweep": {
+            "task": "app.tasks.integrations.sweep_integrations",
+            "schedule": 300.0,  # webhook deliveries + email transport, 5 min
         },
     },
 )

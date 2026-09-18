@@ -216,6 +216,13 @@ async def run_due_schedules(session: AsyncSession, now: datetime | None = None) 
                            detail={"export_job_id": str(job.id),
                                    "object_key": object_key_out},
                            correlation_id=None, actor_kind="system")
+        if object_key_out:
+            from app.services.webhooks import queue_event
+            await queue_event(session, sched.org_path, "report.ready", {
+                "report_key": sched.report_key, "schedule_id": str(sched.id),
+                "period": f"{period_start:%Y-%m}", "rows": len(rows),
+                "object_key": object_key_out, "sha256": sha,
+            }, scope="/")  # trusted root-scope worker (same as the due-scan)
         await session.execute(
             update(ReportSchedule).where(ReportSchedule.id == sched.id)
             .values(last_run_at=now, next_run_at=compute_next_run(sched, now)))

@@ -121,7 +121,9 @@ async def test_run_due_schedules_generates_and_advances(client, migrated_db, mon
             else sched.next_run_at
         assert got == datetime(2026, 10, 15, 6, tzinfo=UTC)
         assert sched.last_run_at is not None
-        jobs = list((await s.execute(select(ExportJob))).scalars())
+        jobs = list((await s.execute(
+            select(ExportJob).where(ExportJob.parameters[
+                "scheduled"].as_boolean().is_(True)))).scalars())
         assert len(jobs) == 1, jobs
         assert jobs[0].status == "completed", jobs[0].parameters.get("error")
         assert jobs[0].parameters["scheduled"] is True
