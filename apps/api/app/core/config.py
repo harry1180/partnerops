@@ -9,6 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,6 +39,12 @@ class Settings(BaseSettings):
     app_env: str = Field(default="local", alias="APP_ENV")
     version: str = "0.1.0"
     secret_key: str = Field(default=_PLACEHOLDER, alias="SECRET_KEY")
+    # dedicated operational key for sealed tenant secrets (webhook signing
+    # secrets; see app/core/secretbox.py). Falls back to a derivation of
+    # secret_key in local/test only.
+    secret_encryption_key: str = Field(default="", alias="SECRET_ENCRYPTION_KEY")
+    # comma list of exact hosts served by this deployment ("*" local default)
+    trusted_hosts: str = Field(default="*", alias="TRUSTED_HOSTS")
 
     database_url: str = Field(default="", alias="DATABASE_URL")
     database_url_migrate: str = Field(default="", alias="DATABASE_URL_MIGRATE")
@@ -82,6 +89,24 @@ class Settings(BaseSettings):
                 "SECRET_KEY is still the development placeholder while APP_ENV="
                 f"{self.app_env!r}. Refusing to start with an insecure secret."
             )
+        if not self.is_local and not self.secret_encryption_key:
+            raise RuntimeError(
+                "SECRET_ENCRYPTION_KEY must be set outside local/test — tenant "
+                "secrets must not ride on a key derived from session signing."
+            )
+        if not self.is_local and self.trusted_hosts.strip() in ("", "*"):
+            raise RuntimeError(
+                "TRUSTED_HOSTS must list the exact deployment hostnames outside "
+                "local/test (host-header protection).")
+        if self.secret_encryption_key:
+            try:
+                Fernet(self.secret_encryption_key.encode())
+            except Exception as exc:  # noqa: BLE001 - config clarity error
+                raise RuntimeError(
+                    "SECRET_ENCRYPTION_KEY must be a urlsafe Fernet key "
+                    f"(generate: python -c \"from app.core.secretbox import "
+                    f"generate_key; print(generate_key())\"); got: {exc}"
+                ) from None
 
 
 @lru_cache

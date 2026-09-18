@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/lib/app-state";
 import {
   checkIntegration, createIntegration, createWebhook, fetchDeliveries, fetchOverview,
+  rotateWebhookSecret,
   testWebhook, type DeliveryRow, type Overview,
 } from "@/lib/integrations-api";
 import {
@@ -87,6 +88,11 @@ export default function IntegrationsPage() {
                               const r = await fetchDeliveries(e.id);
                               setDeliveries({ id: e.id, items: r.items });
                             }}>Deliveries</Button>
+                            <Button size="sm" variant="ghost" title="New signing secret, shown once"
+                              onClick={async () => {
+                                try { const r = await rotateWebhookSecret(e.id); setSecret(r.signing_secret); }
+                                catch (err) { setError(String(err instanceof Error ? err.message : err)); }
+                              }}>Rotate secret</Button>
                           </div>
                         </TD>
                       </TR>

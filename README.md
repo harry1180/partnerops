@@ -133,7 +133,7 @@ make up / make down # compose lifecycle
 | 3 | Azure & multi-cloud adapter | **Complete** (see docs/reports/phase-3-report.md) |
 | 4 | FinOps: budgets, forecasts, anomalies, optimization, governance | **Complete** (see docs/reports/phase-4-report.md) |
 | 5 | AI PartnerOps assistant + integrations/webhooks/ERP exports | **Complete** (see docs/reports/phase-5-report.md) |
-| 6 | Production hardening | Planned |
+| 6 | Production hardening (sealed secrets, SSRF, boot validation, drills) | **Complete** (see docs/reports/phase-6-report.md) |
 
 ## Safety rules this project follows
 

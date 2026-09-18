@@ -1,7 +1,7 @@
 # Implementation Status
 
 Working source of truth for what is verified. Updated at every phase gate.
-Last update: Phase 5 — **complete** (see docs/reports/phase-5-report.md).
+Last update: Phase 6 — **complete** (see docs/reports/phase-6-report.md). Charter scope (Phases 0–6) shipped.
 
 ## Phase 0 — Foundation ✅ COMPLETE
 
@@ -258,8 +258,24 @@ Verification:
 - Web: typecheck 0; vitest 8; `next build` clean (assistant, integrations,
   portal/assistant prerender).
 
-## Next: Phase 6 — hardening & deployment
+## Phase 6 — Production hardening (COMPLETE)
 
-Auth hardening (SSO/OIDC seam), KMS secret refs, DNS-pinned egress, load/
-scale passes, backup/restore drills, staging deploy. (Remaining charter
-scope after Phase 6 = polish; see charter phase table.)
+Shipped: Fernet-sealed tenant secrets under a dedicated
+SECRET_ENCRYPTION_KEY (ADR-0019; DB dumps yield ciphertext); boot now
+refuses placeholder keys, missing/invalid encryption keys, or wildcard
+TRUSTED_HOSTS outside local/test (refusal matrix exercised); DNS-answer
+SSRF checks at endpoint creation and every send; honest test-send
+(connectivity of the clicked endpoint); webhook secret rotation (shown
+once); TrustedHostMiddleware host protection (API) and prod-only security
+headers + CSP (web, verified against a `next start` build); backup/restore
++ migration downgrade/upgrade drills run on scratch copies with parity
+checks; deploy & backup runbooks (`docs/runbooks/`).
+
+Verification: ruff/mypy clean (97 files); pytest **131 passed** (6 new);
+SMOKE5_OK re-run through the sealed-secret path (receiver HMAC verifies);
+journey 18 passed; boot-refusal matrix + drill parity recorded in
+docs/reports/phase-6-report.md.
+
+Charter status: **Phases 0–6 complete.** Remaining work is deployment
+(KMS custody, egress proxy, managed PITR) — the product fails closed
+without it; the runbooks specify exactly what to provision.

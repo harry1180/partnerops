@@ -84,6 +84,17 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
 )
 
+# Host-header protection: when configured (required outside local/test, see
+# validate_for_boot), reject requests whose Host isn't an allowed deployment
+# hostname — blocks cache poisoning / password-reset-style host abuse.
+# (Security headers themselves are already set by security_headers_middleware
+# below — nosniff, frame-ancestors, referrer policy, CSP, prod HSTS.)
+_allowed_hosts = [h.strip() for h in settings.trusted_hosts.split(",") if h.strip()]
+if _allowed_hosts != ["*"]:
+    from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+
 
 @app.middleware("http")
 async def correlation_middleware(request: Request, call_next):

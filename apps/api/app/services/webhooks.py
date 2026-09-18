@@ -8,16 +8,19 @@ subscribed to that event_type. Delivery is a signed POST:
     X-CPPartnerOps-Signature: sha256=<hmac_sha256(secret, f"{ts}.{body}")>
     Idempotency-Key: <delivery id>          (receiver may dedupe)
 
-Secret handling: the signing secret is generated server-side, shown to the
-user exactly once at creation, and stored referenced by `secret_ref`
-(`local:secret-store/<id>`). The value itself lives in the endpoint config
-JSON under a clearly-labeled key for local/synthetic deployments; production
-deployments swap this for a KMS/Secrets-Manager fetch at send time (Phase 6
-deployment work) — the send path only ever reads through `_secret_of()`.
+Secret handling: the signing secret is generated server-side and shown to
+the user exactly once (creation or rotation). Only a sealed token lives at
+rest: `secret_ref` = `enc:v1:<fernet>` under SECRET_ENCRYPTION_KEY, a
+dedicated operational key (ADR-0019) — a database dump yields ciphertext.
+`kms:v1:<ref>` names resolve through a configured KMS provider at send
+time; unconfigured providers raise, they never fake success. Pre-hardening
+`local:v1:<plain>` rows still deliver until rotated.
 
-SSRF posture: https/http only; metadata/link-local addresses are refused
-always; RFC1918/loopback targets are refused outside local/test deployments
-where the demo needs them (config-gated, tested).
+SSRF posture: https/http only; metadata/link-local/multicast addresses are
+refused always; RFC1918/loopback targets are refused outside local/test
+deployments where the demo needs them (config-gated, tested). Hostnames
+are additionally resolved before send — any disallowed DNS answer refuses
+the delivery (residual rebinding TOCTOU is handled at deployment egress).
 
 Email transport: local/test writes queued outbox messages to
 logs/notifications.ndjson (one JSON line per message) and marks them sent —
@@ -41,6 +44,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import secretbox
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.rls import set_bypass_scope, set_org_scope
@@ -96,12 +100,53 @@ def validate_target_url(url: str, *, allow_private: bool) -> str | None:
         # delivery with a recorded reason.
         if host.endswith(".internal") or host == "metadata":
             return "internal hostname refused"
-        return None
+        return None  # IP-level checks for names run at resolve time below
+    return _rejected_ip(str(addr), allow_private=allow_private)
+
+
+def _rejected_ip(addr_str: str, *, allow_private: bool) -> str | None:
+    try:
+        addr = ipaddress.ip_address(addr_str)
+    except ValueError:
+        return "unparsable address"
     for net in _ALWAYS_BLOCKED:
         if addr in net:
             return "target address refused (metadata/link-local)"
-    if not allow_private and (addr.is_private or addr.is_loopback or addr.is_link_local):
+    if addr.is_multicast or addr.is_unspecified:
+        return "target address refused (multicast/unspecified)"
+    if not allow_private and (addr.is_private or addr.is_loopback
+                              or addr.is_link_local):
         return "private/loopback targets are only allowed in local or test deployments"
+    return None
+
+
+async def resolve_error(url: str, *, allow_private: bool) -> str | None:
+    """Resolve the target's hostname and refuse if ANY DNS answer is a
+    disallowed address (closes the 'public-looking hostname -> 127.0.0.1'
+    gap). Residual DNS-rebinding TOCTOU is a deployment-egress concern
+    (proxy/security group), documented in the phase-6 report. Callers
+    should pair this with validate_target_url (structural checks)."""
+    import asyncio
+    import socket
+
+    host = urlparse(url).hostname or ""
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        return _rejected_ip(str(addr), allow_private=allow_private)
+    if host.endswith(".internal") or host == "metadata":
+        return "internal hostname refused"
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(
+            host, None, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return "hostname does not resolve"
+    for info in infos:
+        err = _rejected_ip(str(info[4][0]), allow_private=allow_private)
+        if err:
+            return f"{err} (resolved {info[4][0]})"
     return None
 
 
@@ -110,16 +155,17 @@ async def create_endpoint(session: AsyncSession, org_path: str, *, url: str,
     await set_org_scope(session, org_path)
     settings = get_settings()
     err = validate_target_url(url, allow_private=settings.is_local)
+    if err is None:
+        err = await resolve_error(url, allow_private=settings.is_local)
     if err:
         raise ValueError(err)
     secret = generate_signing_secret()
     ep = WebhookEndpoint(
         org_id=_org_id(org_path), org_path=org_path, url=url,
         events=sorted(set(events)), status="active", description=description,
-        # local mode keeps the value in the ref itself (see module docstring);
-        # production swaps this to a KMS/Secrets-Manager reference resolved in
-        # _secret_of() at send time.
-        secret_ref=f"local:v1:{secret}",
+        # sealed with the operational key (ADR-0019); a DB dump yields
+        # ciphertext. kms:v1: refs resolve via a configured provider.
+        secret_ref=secretbox.seal(secret),
     )
     session.add(ep)
     await session.flush()
@@ -132,28 +178,38 @@ def _org_id(org_path: str):
 
 
 async def queue_event(session: AsyncSession, org_path: str, event_type: str,
-                      payload: dict, *, scope: str | None = None) -> int:
+                      payload: dict, *, scope: str | None = None,
+                      force_endpoint_id=None) -> int:
     """Create pending deliveries for every active endpoint at this event's
     org or an ancestor of it (an MSP configures endpoints at its own root;
     the invoice lives under a customer subtree). `scope` is the caller's
     RLS boundary for the endpoint lookup (worker passes "/" root-scope);
     deliveries themselves are stored at the event's org_path.
+    `force_endpoint_id` bypasses subscription filtering for a specific
+    endpoint (connectivity test of one target).
     Idempotent-safe: caller wraps in its own transaction."""
     await set_org_scope(session, scope or org_path)
-    segs = [s for s in org_path.split("/") if s]
-    prefixes = {"/" + "/".join(segs[:i]) + "/" for i in range(1, len(segs) + 1)}
-    if scope and scope != "/":
-        prefixes = {p for p in prefixes if p.startswith(scope)}
-    eps = (await session.execute(
-        select(WebhookEndpoint).where(
-            WebhookEndpoint.org_path.in_(prefixes),
-            WebhookEndpoint.deleted_at.is_(None),
-            WebhookEndpoint.status == "active")
-    )).scalars().all()
+    if force_endpoint_id is not None:
+        eps = (await session.execute(
+            select(WebhookEndpoint).where(
+                WebhookEndpoint.id == force_endpoint_id,
+                WebhookEndpoint.deleted_at.is_(None))
+        )).scalars().all()
+    else:
+        segs = [s for s in org_path.split("/") if s]
+        prefixes = {"/" + "/".join(segs[:i]) + "/" for i in range(1, len(segs) + 1)}
+        if scope and scope != "/":
+            prefixes = {p for p in prefixes if p.startswith(scope)}
+        eps = (await session.execute(
+            select(WebhookEndpoint).where(
+                WebhookEndpoint.org_path.in_(prefixes),
+                WebhookEndpoint.deleted_at.is_(None),
+                WebhookEndpoint.status == "active")
+        )).scalars().all()
     now = datetime.now(UTC)
     n = 0
     for ep in eps:
-        if event_type not in (ep.events or []):
+        if force_endpoint_id is None and event_type not in (ep.events or []):
             continue
         session.add(WebhookDelivery(
             endpoint_id=ep.id, org_path=org_path, event_type=event_type,
@@ -165,10 +221,7 @@ async def queue_event(session: AsyncSession, org_path: str, event_type: str,
 
 
 def _secret_of(ep: WebhookEndpoint) -> str | None:
-    ref = ep.secret_ref or ""
-    if ref.startswith("local:v1:"):
-        return ref.removeprefix("local:v1:")
-    return None
+    return secretbox.unseal(ep.secret_ref)
 
 
 async def deliver_due(session: AsyncSession, limit: int = 20,
@@ -191,7 +244,19 @@ async def deliver_due(session: AsyncSession, limit: int = 20,
             d.status = "failed"
             d.response_code = None
             continue
-        secret = _secret_of(ep)
+        try:
+            secret = _secret_of(ep)
+        except RuntimeError as exc:  # kms:v1 without a configured provider
+            d.status = "failed"
+            d.payload = {**d.payload, "_delivery_error": str(exc)[:200]}
+            continue
+        if secret is None:
+            # never send an unsigned payload — receivers must be able to
+            # assume every delivery carrying our header is verifiable
+            d.status = "failed"
+            d.payload = {**d.payload,
+                         "_delivery_error": "signing secret unresolvable (key rotated?)"}
+            continue
         body = json.dumps({"event": d.event_type, "delivery_id": str(d.id),
                            "timestamp": int(time.time()), "data": d.payload},
                           ensure_ascii=False).encode()
@@ -199,7 +264,7 @@ async def deliver_due(session: AsyncSession, limit: int = 20,
         headers = {
             "Content-Type": "application/json",
             "X-CPPartnerOps-Timestamp": str(ts),
-            "X-CPPartnerOps-Signature": f"sha256={sign(secret, ts, body)}" if secret else "",
+            "X-CPPartnerOps-Signature": f"sha256={sign(secret, ts, body)}",
             "Idempotency-Key": str(d.id),
             "User-Agent": "CloudPartnerOps-Webhooks/1",
         }
@@ -207,6 +272,12 @@ async def deliver_due(session: AsyncSession, limit: int = 20,
         attempted += 1
         settings = get_settings()
         err = validate_target_url(ep.url, allow_private=settings.is_local)
+        if err is None:
+            # DNS-aware check at send time: a hostname must not resolve to a
+            # disallowed address (e.g. public-looking name -> 127.0.0.1).
+            # In local/test, private is allowed, so this only blocks the
+            # always-refused ranges/metadata. Unresolvable hosts fail there too.
+            err = await resolve_error(ep.url, allow_private=settings.is_local)
         if err:
             d.status = "failed"
             d.payload = {**d.payload, "_delivery_error": err}

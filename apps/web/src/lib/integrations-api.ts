@@ -87,6 +87,13 @@ export const createIntegration = (body: { kind: string; name: string; config?: R
 export const checkIntegration = (id: string) =>
   api.post<{ connected: boolean; detail: string }>(`/api/v1/integrations/${id}/check`, {});
 
+export const rotateWebhookSecret = (id: string) =>
+  api.post<{ signing_secret: string; note: string }>(
+    `/api/v1/integrations/webhooks/${id}/rotate-secret`, {});
+export const runDeliverySweep = (endpointId?: string) =>
+  api.post<{ attempted: number }>(
+    `/api/v1/integrations/webhooks/deliver${endpointId ? `?endpoint_id=${endpointId}` : ""}`, {});
+
 /** ERP journal export — direct anchor download (GET, cookie auth). */
 export function erpExportUrl(id: string, fmt: "json" | "csv"): string {
   return `/api-backend/api/v1/invoices/${id}/export?fmt=${fmt}`;

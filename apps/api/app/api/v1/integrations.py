@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.api.deps import CSRF, Principal, SessionDep
+from app.core import secretbox
 from app.db.rls import set_org_scope
 from app.models.approvals import Integration, WebhookDelivery, WebhookEndpoint
 from app.models.billing_core import Customer
@@ -73,7 +74,8 @@ async def overview(session: SessionDep, principal: Principal):
         "webhook_endpoints": [{
             "id": str(e.id), "url": e.url, "events": e.events, "status": e.status,
             "description": e.description,
-            "secret_configured": bool(e.secret_ref and e.secret_ref.startswith("local:v1:")),
+            "secret_configured": secretbox.is_sealed(e.secret_ref) or bool(
+                e.secret_ref and e.secret_ref.startswith("local:v1:")),
         } for e in eps],
         "integrations": [{
             "id": str(i.id), "kind": i.kind, "name": i.name, "status": i.status,
@@ -175,7 +177,8 @@ async def test_webhook(endpoint_id: uuid.UUID, body: TestSend, session: SessionD
     if ep is None or ep.deleted_at is not None or not ep.org_path.startswith(org_path):
         raise HTTPException(404, detail={"code": "not_found"})
     n = await wh.queue_event(session, org_path, "integration.test",
-                             {"endpoint_id": str(ep.id), "requested_by": principal.email})
+                             {"endpoint_id": str(ep.id), "requested_by": principal.email},
+                             force_endpoint_id=ep.id, scope=org_path)
     # sweep only this endpoint: another endpoint's dead target must not delay
     # this call (head-of-line blocking) — the beat sweep handles the rest.
     delivered = await wh.deliver_due(session, limit=10, endpoint_id=ep.id)
@@ -193,6 +196,29 @@ async def test_webhook(endpoint_id: uuid.UUID, body: TestSend, session: SessionD
                         "response_code": d.response_code,
                         "error": (d.payload or {}).get("_delivery_error")}
                        for d in rows if d.event_type == "integration.test"]}
+
+
+@router.post("/integrations/webhooks/{endpoint_id}/rotate-secret", dependencies=[CSRF])
+async def rotate_webhook_secret(endpoint_id: uuid.UUID, session: SessionDep,
+                                principal: Principal):
+    """New signing secret, shown exactly once. In-flight deliveries keep the
+    signature the receiver last validated — rotation is a receiver-coordinates
+    operation; run it during a quiet window or dual-verify on their side."""
+    _require(principal, "integration.manage")
+    org_path = _partner_root(principal)
+    await set_org_scope(session, org_path)
+    ep = await session.get(WebhookEndpoint, endpoint_id)
+    if ep is None or ep.deleted_at is not None or not ep.org_path.startswith(org_path):
+        raise HTTPException(404, detail={"code": "not_found"})
+    secret = wh.generate_signing_secret()
+    ep.secret_ref = secretbox.seal(secret)
+    await record_audit(session, principal, action="integration.changed", org_path=org_path,
+                       summary=f"Webhook signing secret rotated for {ep.url}",
+                       entity_type="webhook_endpoint", entity_id=ep.id,
+                       detail={"secret_shown_once": True})
+    await session.commit()
+    return {"signing_secret": secret,
+            "note": "shown once; update the receiver's verifier before the next event"}
 
 
 @router.post("/integrations/webhooks/deliver", dependencies=[CSRF])

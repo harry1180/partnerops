@@ -13,7 +13,7 @@ settings = get_settings()
 
 # Deployment phase of the shipped code. The UI disables any nav entry whose
 # available_from_phase exceeds this — a page may only link when it exists.
-CURRENT_PHASE = 5
+CURRENT_PHASE = 6
 
 # Navigation manifest — the single source of truth for main-nav sections and
 # which permission gates each. The UI renders ONLY sections whose permission
