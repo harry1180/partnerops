@@ -220,6 +220,25 @@ test.describe("partner billing journey", () => {
     await expect(page.getByText(NAME)).toBeVisible({ timeout: 30_000 });
   });
 
+  test("10b. (Phase 4) Budgets page: seeded cap, anomaly pass finds the planted spike; governance evaluates", async ({ page }) => {
+    await uiLogin(page, "msp@northwind-msp.example.com");
+    await page.goto(`${WEB}/budgets`);
+    await expect(page.getByText("Cobalt August cap")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Run anomaly pass" }).click();
+    await expect(page.getByText(/Anomaly pass: \d+ new.*subject/)).toBeVisible({ timeout: 60_000 });
+    // the anomalies card renders (service-specific rows depend on prior reviews)
+    await expect(page.getByText("Open anomalies")).toBeVisible({ timeout: 15_000 });
+
+    await page.goto(`${WEB}/governance`);
+    await page.getByRole("button", { name: "Evaluate now" }).click();
+    await expect(page.getByText(/Evaluated: \d+ new findings/)).toBeVisible({ timeout: 60_000 });
+    // every finding row carries the evidence dialog
+    const row = page.locator("table").last().locator("tbody tr").first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.getByRole("button").first().click();
+    await expect(page.getByText("Evidence", { exact: true })).toBeVisible({ timeout: 10_000 });
+  });
+
   test("11. Customer user sees the issued invoice in the portal and disputes it", async ({ browser }) => {
     test.skip(!invoiceId, "invoice step failed");
     const cust = await apiGet<{ id: string; org_path: string }>(msp, `/api/v1/customers/${customerId}`);

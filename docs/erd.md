@@ -138,8 +138,15 @@ account ref, cadence, last-ingest evidence, FK to the last ingested
 `subscriptions`/`resource_groups` (modeled since Phase 0) are now populated
 by the Azure demo seed.
 
-## Phase 4+ additions (planned, not yet created)
+## Phase 4 additions (shipped)
 
-`Budgets`, `Anomalies`, `Recommendations`, `GovernancePolicies`,
-`GovernanceFindings`, `CostAlerts` — all org_path-scoped, all conforming to
-this soft-delete + audit conventions; see IMPLEMENTATION_STATUS.md.
+`budgets`, `cost_anomalies`, `recommendations`, `governance_policies`,
+`governance_findings`, `policy_exceptions` — all org_path-scoped with the
+same RLS subtree policy; anomaly/recommendation/finding rows carry evidence
+JSON and dedupe keys for idempotent re-runs.
+
+## Phase 5+ additions (planned, not yet created)
+
+`AiQueryAudit` exists from Phase 0 (assistant itself is Phase 5); budgets/
+anomalies/optimizer tables above are live. Remaining planned: provider-config
+governance connectors, ERP export job types.

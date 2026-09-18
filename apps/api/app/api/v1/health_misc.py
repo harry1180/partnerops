@@ -13,7 +13,7 @@ settings = get_settings()
 
 # Deployment phase of the shipped code. The UI disables any nav entry whose
 # available_from_phase exceeds this — a page may only link when it exists.
-CURRENT_PHASE = 3
+CURRENT_PHASE = 4
 
 # Navigation manifest — the single source of truth for main-nav sections and
 # which permission gates each. The UI renders ONLY sections whose permission
@@ -47,6 +47,8 @@ PORTAL_NAVIGATION: list[dict] = [
     {"key": "portal_overview", "label": "Cost Overview", "href": "/portal", "permission": "customer.read", "available_from_phase": 1},
     {"key": "portal_usage", "label": "Usage Explorer", "href": "/portal/usage", "permission": "cost.read", "available_from_phase": 1},
     {"key": "portal_invoices", "label": "Invoices", "href": "/portal/invoices", "permission": "invoice.read", "available_from_phase": 1},
+    {"key": "portal_budgets", "label": "Budgets", "href": "/portal/budgets", "permission": "customer.read", "available_from_phase": 4},
+    {"key": "portal_anomalies", "label": "Cost Changes", "href": "/portal/anomalies", "permission": "customer.read", "available_from_phase": 4},
 ]
 
 

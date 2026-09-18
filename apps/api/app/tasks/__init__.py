@@ -19,7 +19,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.database_url.replace("postgresql+psycopg", "db+postgresql+psycopg"),
     include=["app.tasks.billing", "app.tasks.ingestion", "app.tasks.reports",
-             "app.tasks.connectors"],
+             "app.tasks.connectors", "app.tasks.finops"],
 )
 
 celery_app.conf.update(
@@ -48,6 +48,10 @@ celery_app.conf.update(
         "due-connectors": {
             "task": "app.tasks.connectors.run_due_connectors",
             "schedule": 900.0,  # every 15 minutes; due-checking is per connector
+        },
+        "nightly-finops-passes": {
+            "task": "app.tasks.finops.run_finops_passes",
+            "schedule": crontab(hour=3, minute=40),
         },
     },
 )

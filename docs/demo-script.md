@@ -102,6 +102,25 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
     Azure VM charges; the lineage view traces each line back to source
     records in *both* provider files.
 
+## Act 4d — FinOps & governance (Phase 4)
+
+20. **Budgets & Anomalies**: the seeded "Cobalt August cap" shows actual vs
+    budget with the over-budget state driven by the same fixture that plants
+    a 14× CloudFront spike. Click **Run anomaly pass** — the method label
+    ("robust median/MAD z-score", not ML) and per-row evidence
+    (observed/baseline/month) are in the payload; acknowledge one.
+21. **Optimization**: recommendations computed from billing evidence only —
+    open any card: the `basis` block shows the exact numbers; accept or
+    dismiss (audited). "Realized" stays $0.00 until post-decision months
+    arrive — it is measured, never projected. Unit-economics rollups and
+    tag-coverage bars sit alongside.
+22. **Governance**: seeded policies (approved regions, no-unallocated) →
+    **Evaluate now** → findings with evidence; grant a time-boxed exception
+    and watch the finding flip to `excepted`; expiry reopens it next pass.
+23. **Customer portal → Budgets / Cost Changes**: sign in as Acme — the
+    portal shows only their own caps vs their own charges; no margin, no
+    provider internals (asserted in the smoke + journey).
+
 ## The isolation punchline
 
 13. Sign in as **Casey Cascade** (`msp@cascade-it.example.com`, the other
@@ -117,5 +136,8 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
 - Phase 3 multi-cloud workflow: `python tools/smoke_phase3_live.py` (Azure
   connector run, orphan discovery, per-account bill totals, merged recon
   delta, multi-cloud pricing + lineage)
+- Phase 4 FinOps workflow: `python tools/smoke_phase4_live.py` (budgets +
+  variance, anomaly pass + review, recommendation decision flow, forecast,
+  governance evaluate + exceptions, portal scoping)
 - Browser journey (this script as a test): `npx playwright test`
 - Golden numbers: `python -m pytest tests/test_golden_billing.py -q`

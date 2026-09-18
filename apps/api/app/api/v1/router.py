@@ -18,6 +18,8 @@ from app.api.v1 import (
     contracts,
     customers,
     extras,
+    finops,
+    governance,
     health_misc,
     margins,
     ops,
@@ -41,6 +43,8 @@ api_router.include_router(approvals.router, tags=["approvals"])
 api_router.include_router(ops.router, tags=["billing-ops"])
 api_router.include_router(benefits_api.router, tags=["benefits"])
 api_router.include_router(reports.router, tags=["reports"])
+api_router.include_router(finops.router, tags=["finops"])
+api_router.include_router(governance.router, tags=["governance"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(branding.router, prefix="/branding", tags=["branding"])
 api_router.include_router(audit.router, prefix="/audit-events", tags=["audit"])

@@ -1,7 +1,7 @@
 # Implementation Status
 
 Working source of truth for what is verified. Updated at every phase gate.
-Last update: Phase 3 — **complete** (see docs/reports/phase-3-report.md).
+Last update: Phase 4 — **complete** (see docs/reports/phase-4-report.md).
 
 ## Phase 0 — Foundation ✅ COMPLETE
 
@@ -174,9 +174,50 @@ Verification (2026-09-17):
   twice consecutively.
 - `pnpm typecheck` 0 errors; vitest 8; `next build` clean.
 
-## Next: Phase 4 — FinOps & governance
+## Phase 4 — FinOps & governance (COMPLETE)
 
-Budgets, forecasts, statistical anomaly detection with configurable
-thresholds, optimization recommendations (rightsizing, idle resources),
-savings tracking, tag compliance, governance policy engine (findings,
-exceptions, remediation guidance).
+Shipped:
+
+- **Budgets** (partner/customer scope) with straight-line burn projection —
+  closed periods report actual, never phantom-projected. Portal-safe
+  customer projection at /portal/budgets.
+- **Anomaly detection**: robust MoM median/MAD z-score with abs + relative
+  floors; every row persists its method and evidence; re-runs upsert and
+  auto-resolve stale signals (ADR-0017). /portal/anomalies shows customers
+  only 'their spend changed, here is the size'.
+- **Forecasting** (`avg_mom_growth_linear`, method in payload), **unit
+  economics** per application/environment/owner/cost-center, **tag
+  coverage** + unallocated-cost totals.
+- **Recommendations**: idle leftover, non-prod right-size, commitment gap
+  (estimated from the discount factor observed in the same book),
+  marketplace review — each with basis + confidence; accept/dismiss audited;
+  **savings realization is measured, never projected** (stays 0 until
+  post-decision data exists).
+- **Governance**: policy engine over billing facts → findings with evidence
+  and lifecycle (open/acknowledged/excepted/remediated/reopened); time-boxed
+  exceptions auto-revoke. Provider-config kinds exist in the model but
+  evaluate to zero rather than being faked.
+- **UI**: Budgets & Anomalies, Optimization, Governance console pages;
+  portal Budgets + Cost Changes; FinOps nav group live; nightly beat pass
+  (system-audited). `CURRENT_PHASE=4`.
+
+Verification (2026-09-18):
+
+- `ruff` clean; `mypy` clean (91 files); `pytest` **115 passed** (new
+  `test_finops_phase4.py` ×9, `test_phase4_api.py` ×6); RLS **6 passed**
+  after fresh drop→migrate(`8bd7518cfa18`)→seed; six new tables verified
+  RLS-enabled.
+- **NEW** `smoke_phase4_live.py` **SMOKE4_OK** (24 steps incl. the planted
+  Cobalt spike surfacing, the noise-drop regression, realized-savings
+  honesty, portal leak checks). Smokes 1–3 re-passed on the reset DB.
+- Playwright journey **15 passed, 1 skipped** (assistant = Phase 5); new
+  step 10b (anomaly pass + governance evaluate in the UI), run twice.
+- Web: typecheck 0; vitest 8; `next build` clean; headless probe: all five
+  new pages render with data, 0 page errors.
+
+## Next: Phase 5 — AI assistant & integrations
+
+Permission-aware assistant (deterministic demo mode, cited internal records,
+read-only tools, audit of sensitive queries), scoped API tokens + rotation,
+signed webhooks, ERP export formats, notification delivery behind the
+existing outbox, Integrations admin page.

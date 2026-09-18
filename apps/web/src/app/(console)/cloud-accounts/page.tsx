@@ -284,7 +284,7 @@ function ConnectorsPanel() {
             )}
           </TBody>
         </Table>
-        {msg && <p className="border-t border-line px-3 py-2 text-xs text-ink-500">{msg}</p>}
+        {msg && <p className="border-t border-ink-100 px-3 py-2 text-xs text-ink-500">{msg}</p>}
       </CardBody>
     </Card>
   );

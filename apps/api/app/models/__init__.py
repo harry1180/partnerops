@@ -51,6 +51,14 @@ from app.models.cost import (  # noqa: F401
     RawBillingFile,
     RawBillingRecord,
 )
+from app.models.finops import (  # noqa: F401
+    Budget,
+    CostAnomaly,
+    GovernanceFinding,
+    GovernancePolicy,
+    PolicyException,
+    Recommendation,
+)
 from app.models.invoices import (  # noqa: F401
     BillingNote,
     Dispute,

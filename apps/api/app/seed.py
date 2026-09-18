@@ -314,6 +314,36 @@ async def seed() -> dict:
             session.add(conn)
         await session.flush()
 
+        # Phase 4: demo governance policies + one over-threshold budget.
+        from app.models.finops import Budget as _Budget
+        from app.models.finops import GovernancePolicy as _Pol
+
+        acme = (await session.execute(  # noqa: F841  (demo anchor for future phases)
+            select(Customer).where(Customer.code == "ACME"))).scalar_one()
+        cobalt = (await session.execute(
+            select(Customer).where(Customer.code == "COBA"))).scalar_one()
+        session.add_all([
+            _Pol(org_id=msp_nw_id, org_path=msp_nw_path,
+                 name="Approved regions: eastus2 only", kind="approved_regions",
+                 severity="high", owner_label="FinOps",
+                 parameters={"regions": ["eastus2"]},
+                 remediation="Move workloads into the approved region or file a "
+                             "policy exception with a business reason."),
+            _Pol(org_id=msp_nw_id, org_path=msp_nw_path,
+                 name="Every account must map to a customer", kind="unallocated_cost",
+                 severity="critical", owner_label="Billing",
+                 parameters={},
+                 remediation="Map the account/subscription to an account family so "
+                             "its usage is billable."),
+            _Budget(org_id=msp_nw_id, org_path=cobalt.org_path, name="Cobalt August cap",
+                    scope_kind="customer", customer_id=cobalt.id,
+                    amount=Decimal("4000"), currency="USD",
+                    period_start=_dt(2026, 8, 1, tzinfo=_UTC),
+                    period_end=_dt(2026, 9, 1, tzinfo=_UTC),
+                    alert_threshold_pct=80),
+        ])
+        await session.flush()
+
         # branding: platform root defaults
         await set_org_scope(session, "/")
         session.add(
