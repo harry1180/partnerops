@@ -49,3 +49,6 @@ Thumbs.db
 *.log
 cfg.out
 cfg.err
+
+# local runtime logs (api/web stdout, notification transport)
+logs/

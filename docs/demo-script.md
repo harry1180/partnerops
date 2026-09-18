@@ -142,6 +142,14 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
     `cpo.erp.v1` — header, PO reference, totals, customer-visible lines.
     Grep it: no provider cost, no margin, no internal notes. The audit
     trail records `export.generated`.
+27. **Budget alerts** (Phase 7, budgets page): **Run alert pass** — the
+    Cobalt cap opens an episode: a signed `budget.over_threshold` webhook
+    delivery and role-routed emails (MSP + FinOps analyst; never the
+    billing analyst) flush through the local transport to
+    `logs/notifications.ndjson`. Run it again: zero duplicates. A row shows
+    "alert sent · episode #N"; recovery closes the episode and the next
+    breach re-arms. Ingesting a file with unmapped accounts emits
+    `orphan.discovered`.
 
 ## The isolation punchline
 
@@ -165,5 +173,8 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
   (cited answers + honest refusals + AI audit, webhook secret-once,
   receiver-side HMAC verification against a real listener, ERP export
   leak-checks, scoped Bearer token, portal assistant boundary)
+- Phase 7 alerts workflow: `python tools/smoke_phase7_live.py` (budget
+  breach episode → signed webhook + role-routed emails, duplicate
+  suppression, orphan-event subscription, audit)
 - Browser journey (this script as a test): `npx playwright test`
 - Golden numbers: `python -m pytest tests/test_golden_billing.py -q`

@@ -1,7 +1,7 @@
 # Implementation Status
 
 Working source of truth for what is verified. Updated at every phase gate.
-Last update: Phase 6 — **complete** (see docs/reports/phase-6-report.md). Charter scope (Phases 0–6) shipped.
+Last update: Phase 7 — **complete** (see docs/reports/phase-7-report.md). Charter scope (Phases 0–6) shipped; 7 closed the deferred alert loop.
 
 ## Phase 0 — Foundation ✅ COMPLETE
 
@@ -276,6 +276,24 @@ SMOKE5_OK re-run through the sealed-secret path (receiver HMAC verifies);
 journey 18 passed; boot-refusal matrix + drill parity recorded in
 docs/reports/phase-6-report.md.
 
-Charter status: **Phases 0–6 complete.** Remaining work is deployment
+Charter status: **Phases 0–6 complete** (+ Phase 7 follow-up closing the deferred notification loop; see below). Remaining work is deployment
 (KMS custody, egress proxy, managed PITR) — the product fails closed
 without it; the runbooks specify exactly what to provision.
+
+## Phase 7 — spend alerts follow-up (COMPLETE)
+
+Closes the Phase 4 deferred item ("breach notifications ride the Phase 5
+outbox") and two declared-but-unused seams:
+
+- Budget **alert episodes** (open / stay-open / recover / re-arm) computed
+  with the same burn math the UI shows; one `budget.over_threshold` signed
+  webhook + role-routed emails per episode (`alert.manage`, nightly pass +
+  on-demand `POST /budgets/evaluate-alerts`). State in `budgets.alert_state`
+  (JSON, migration `0f3ab9c41d77`) — no new tables/RLS surface.
+- **orphan.discovered** webhook event when an ingest surfaces unmapped
+  accounts (the actionable version of the unused `ingestion.parsed` ping).
+- Manual sweep endpoint now runs both sweeps (deliver + email flush) like
+  the beat; budgets UI shows "Run alert pass" + episode markers.
+- Gates: pytest 136 (+5), SMOKE7_OK (11 steps ×2, receiver-side HMAC +
+  transport file), journey 18 passed with alert leg, smokes 1–5 re-passed,
+  ruff/mypy/typecheck/vitest/build clean.

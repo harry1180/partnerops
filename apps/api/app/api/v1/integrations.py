@@ -227,10 +227,12 @@ async def retry_pending(session: SessionDep, principal: Principal,
     """Operational: run one delivery sweep now instead of waiting for the
     5-minute beat (endpoints that were down come back via pending retries).
     Optional endpoint_id scopes the sweep (avoids older dead endpoints
-    consuming the whole batch)."""
+    consuming the whole batch). Also flushes queued notification emails
+    through the local transport — the same two sweeps the beat runs."""
     _require(principal, "integration.manage")
     attempted = await wh.deliver_due(session, endpoint_id=endpoint_id)
-    return {"attempted": attempted}
+    emailed = await wh.flush_notifications(session)
+    return {"attempted": attempted, "emails_flushed": emailed}
 
 
 @router.get("/integrations/webhooks/{endpoint_id}/deliveries")

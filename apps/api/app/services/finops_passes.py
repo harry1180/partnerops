@@ -15,7 +15,7 @@ from sqlalchemy import distinct, select
 from app.core.logging import get_logger
 from app.db.rls import set_bypass_scope, set_org_scope
 from app.models.cost import CanonicalCostRecord
-from app.services import anomaly, governance
+from app.services import alerts, anomaly, governance
 from app.services import recommendations as rsvc
 from app.services.audit_service import record_audit
 
@@ -49,17 +49,21 @@ async def run_all_org_passes(session) -> int:
             r_res = await rsvc.run_recommendation_pass(session, org_path)
             realized = await rsvc.realize_savings(session, org_path)
             g_res = await governance.evaluate_policies(session, org_path)
+            al_res = await alerts.evaluate_budget_alerts(session, org_path)
             await record_audit(
                 session, None, action="finops.passes_ran", org_path=org_path,
                 actor_kind="system",
                 summary=(f"Nightly FinOps pass: {a_res.created} anomalies, "
                          f"{r_res.created} recommendations ({realized} realized), "
-                         f"{g_res.findings_open} open findings"),
+                         f"{g_res.findings_open} open findings, "
+                         f"{al_res.opened} budget alerts opened / {al_res.closed} recovered"),
                 entity_type="governance_policy", entity_id=None,
                 detail={"anomalies_created": a_res.created,
                         "recs_created": r_res.created, "realized": realized,
                         "findings_new": g_res.findings_new,
-                        "findings_open": g_res.findings_open},
+                        "findings_open": g_res.findings_open,
+                        "alerts_opened": al_res.opened,
+                        "alerts_closed": al_res.closed},
             )
             await session.commit()
             done += 1

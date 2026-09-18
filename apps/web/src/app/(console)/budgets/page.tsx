@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/lib/app-state";
 import { api } from "@/lib/api";
 import {
-  createBudget, deleteBudget, fetchAnomalies, fetchBudgets, fetchForecast,
+  createBudget, deleteBudget, evaluateAlerts, fetchAnomalies, fetchBudgets, fetchForecast,
   reviewAnomaly, runAnomalyPass,
   type AnomalyRow, type BudgetRow, type ForecastResp,
 } from "@/lib/finops-api";
@@ -17,6 +17,7 @@ export default function BudgetsPage() {
   const { me } = useApp();
   const canManage = me?.permissions.includes("budget.manage") ?? false;
   const canReview = me?.permissions.includes("anomaly.review") ?? false;
+  const canAlert = me?.permissions.includes("alert.manage") ?? false;
   const [budgets, setBudgets] = useState<BudgetRow[] | null>(null);
   const [anomalies, setAnomalies] = useState<AnomalyRow[] | null>(null);
   const [forecast, setForecast] = useState<ForecastResp | null>(null);
@@ -49,6 +50,17 @@ export default function BudgetsPage() {
     finally { setBusy(false); }
   }
 
+  async function runAlerts() {
+    setBusy(true); setError(null);
+    try {
+      const res = await evaluateAlerts();
+      setNotice(`Alert pass: ${res.evaluated} budgets evaluated — ${res.opened} alert(s) sent, `
+        + `${res.closed} recovered, ${res.still_open} already open (no duplicates)`);
+      load();
+    } catch (e) { setError(e instanceof Error ? e.message : "alert pass failed"); }
+    finally { setBusy(false); }
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -57,6 +69,7 @@ export default function BudgetsPage() {
         actions={
           <>
             {canReview && <Button variant="secondary" loading={busy} onClick={runPass}>Run anomaly pass</Button>}
+            {canAlert && <Button variant="secondary" loading={busy} onClick={runAlerts}>Run alert pass</Button>}
             {canManage && <Button onClick={() => setShowCreate(true)}>New budget</Button>}
           </>
         }
@@ -91,6 +104,11 @@ export default function BudgetsPage() {
                           {b.over_budget ? <Badge tone="negative">over budget</Badge>
                             : b.over_threshold ? <Badge tone="warning">over {b.alert_threshold_pct}%</Badge>
                             : <Badge tone="positive">on track</Badge>}
+                          {b.alert_state?.breached && (
+                            <div className="mt-0.5 text-[10px] text-amber-700">
+                              alert sent · episode #{b.alert_state.alert_count}
+                            </div>
+                          )}
                         </TD>
                         <TD className="text-right">
                           {canManage && (

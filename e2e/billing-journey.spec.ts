@@ -230,6 +230,11 @@ test.describe("partner billing journey", () => {
     await expect(page.getByText(/Anomaly pass: \d+ new.*subject/)).toBeVisible({ timeout: 60_000 });
     // the anomalies card renders (service-specific rows depend on prior reviews)
     await expect(page.getByText("Open anomalies")).toBeVisible({ timeout: 15_000 });
+    // (Phase 7) budget alert episode: fires once per breach, never duplicates
+    await page.getByRole("button", { name: "Run alert pass" }).click();
+    await expect(page.getByText(/Alert pass: \d+ budgets evaluated — \d+ alert/)).toBeVisible({ timeout: 60_000 });
+    const cobRow = page.locator("tbody tr").filter({ hasText: "Cobalt August cap" }).first();
+    await expect(cobRow.getByText(/alert sent · episode #\d+/)).toBeVisible({ timeout: 15_000 });
 
     await page.goto(`${WEB}/governance`);
     await page.getByRole("button", { name: "Evaluate now" }).click();

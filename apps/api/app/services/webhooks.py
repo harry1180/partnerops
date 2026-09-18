@@ -1,6 +1,6 @@
 """Webhooks + notification transport (Phase 5).
 
-Events (invoice.issued, dispute.created, ingestion.parsed, report.ready,
+Events (invoice.issued, dispute.created, orphan.discovered, report.ready,
 budget.over_threshold, integration.test) fan out to WebhookEndpoint rows
 subscribed to that event_type. Delivery is a signed POST:
 
@@ -57,9 +57,11 @@ from app.models.approvals import (
 log = get_logger(__name__)
 
 EVENT_TYPES = (
-    "invoice.issued", "dispute.created", "ingestion.parsed", "report.ready",
+    "invoice.issued", "dispute.created", "orphan.discovered", "report.ready",
     "budget.over_threshold", "integration.test",
 )
+# orphan.discovered (not a per-file "ingestion.parsed" ping): the actionable
+# signal is usage arriving from an account nobody has mapped yet.
 MAX_ATTEMPTS = 3
 
 # networks never allowed (cloud metadata etc.)
@@ -306,7 +308,6 @@ async def flush_notifications(session: AsyncSession) -> int:
     """Local transport for queued outbox emails: append one JSON line per
     message to logs/notifications.ndjson and mark sent. Real SMTP adapters
     replace this function's body at the same seam (config-gated)."""
-    from pathlib import Path
 
     await set_bypass_scope(session)
     rows = list((await session.execute(
@@ -317,7 +318,11 @@ async def flush_notifications(session: AsyncSession) -> int:
     )).scalars())
     if not rows:
         return 0
-    log_dir = Path(__file__).resolve().parents[3] / "logs"
+    # .../apps/api/app/services/webhooks.py: parents[2]=apps/api,
+    # parents[4]=repo root — notifications land in the repo-level logs dir.
+    from app.core.config import _REPO_ROOT
+
+    log_dir = _REPO_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
     out = log_dir / "notifications.ndjson"
     now = datetime.now(UTC)

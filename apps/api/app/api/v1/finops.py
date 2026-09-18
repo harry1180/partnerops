@@ -30,6 +30,7 @@ from app.models.finops import (
     CostAnomaly,
     Recommendation,
 )
+from app.services import alerts
 from app.services import budgets as bsvc
 from app.services.audit_service import record_audit
 
@@ -109,6 +110,7 @@ async def list_budgets(session: SessionDep, principal: Principal,
         "pct_of_budget": str(s.pct_of_budget), "projected_pct": str(s.projected_pct),
         "alert_threshold_pct": s.budget.alert_threshold_pct,
         "over_threshold": s.over_threshold, "over_budget": s.over_budget,
+        "alert_state": s.budget.alert_state,
         "days_elapsed": s.days_elapsed, "days_total": s.days_total,
     } for s in statuses]}
 
@@ -127,6 +129,24 @@ async def delete_budget(budget_id: uuid.UUID, session: SessionDep, principal: Pr
                        entity_type="budget", entity_id=b.id)
     await session.commit()
     return {"ok": True}
+
+
+@router.post("/budgets/evaluate-alerts", dependencies=[CSRF])
+async def evaluate_alerts(session: SessionDep, principal: Principal):
+    """Manual alert pass (same episode logic as the nightly): opened
+    episodes queue the budget.over_threshold webhook + emails."""
+    _require(principal, "alert.manage")
+    org_path = _partner_root(principal)
+    res = await alerts.evaluate_budget_alerts(session, org_path)
+    await record_audit(session, principal, action="budget.alerts_evaluated",
+                       org_path=org_path,
+                       summary=(f"Budget alert pass: {res.evaluated} evaluated, "
+                                f"{res.opened} opened, {res.closed} recovered, "
+                                f"{res.still_open} still open"),
+                       entity_type="budget", entity_id=None,
+                       detail=res.as_dict())
+    await session.commit()
+    return res.as_dict()
 
 
 @router.post("/finops/anomalies/run", dependencies=[CSRF])

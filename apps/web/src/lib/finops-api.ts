@@ -11,6 +11,8 @@ export interface BudgetRow {
   actual: string; projected_total: string;
   pct_of_budget: string; projected_pct: string;
   alert_threshold_pct: number; over_threshold: boolean; over_budget: boolean;
+  alert_state: { breached?: boolean; opened_at?: string; last_alert_at?: string;
+    alert_count?: number; recovered_at?: string } | null;
   days_elapsed: number; days_total: number;
 }
 export const fetchBudgets = (includeClosed = false) =>
@@ -18,6 +20,9 @@ export const fetchBudgets = (includeClosed = false) =>
 export const createBudget = (body: Record<string, unknown>) =>
   api.post<{ id: string }>("/api/v1/budgets", body);
 export const deleteBudget = (id: string) => api.del(`/api/v1/budgets/${id}`);
+export const evaluateAlerts = () =>
+  api.post<{ evaluated: number; opened: number; closed: number; still_open: number }>(
+    "/api/v1/budgets/evaluate-alerts", {});
 
 export interface AnomalyRow {
   id: string; kind: string; status: string; customer_id: string | null;

@@ -128,7 +128,12 @@ async def test_run_due_schedules_generates_and_advances(client, migrated_db, mon
         assert jobs[0].status == "completed", jobs[0].parameters.get("error")
         assert jobs[0].parameters["scheduled"] is True
         from app.models.approvals import NotificationOutbox
-        outbox = list((await s.execute(select(NotificationOutbox))).scalars())
+        # scoped to this org's report notifications (other tests legitimately
+        # queue their own notifications into the shared outbox)
+        outbox = list((await s.execute(
+            select(NotificationOutbox).where(
+                NotificationOutbox.kind == "report",
+                NotificationOutbox.org_path == ORG_PATH))).scalars())
         assert len(outbox) == 1 and "August 2026" in outbox[0].subject
         from app.models.audit import AuditEvent
         acts = list((await s.execute(select(AuditEvent.action))).scalars())

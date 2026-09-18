@@ -373,6 +373,15 @@ async def ingest_csv(
                 "unmapped": sorted(unmapped)},
         correlation_id=correlation_id,
     ))
+    if unmapped:
+        # orphan discovery surfaced (charter feature): alert connectors/ops —
+        # queue only; the integrations sweep transports.
+        from app.services.webhooks import queue_event  # local: avoid import cycle
+        await queue_event(session, org_path, "orphan.discovered", {
+            "provider": provider_code, "filename": filename,
+            "file_id": str(file.id), "accounts": sorted(unmapped)[:50],
+            "count": len(unmapped),
+        }, scope=org_path)
     await session.commit()
 
     return IngestSummary(

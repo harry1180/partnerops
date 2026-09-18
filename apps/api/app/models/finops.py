@@ -68,6 +68,9 @@ class Budget(PkMixin, TimestampMixin, SoftDeleteMixin, OrgScopedMixin, Base):
     period_start = mapped_column(DateTime(timezone=True), nullable=False)
     period_end = mapped_column(DateTime(timezone=True), nullable=False)
     alert_threshold_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
+    # Phase 7 alert episode state (JSON): {"breached": bool,
+    # "last_alert_at": iso, "alert_count": n}. Null = never alerted.
+    alert_state: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     created_by = mapped_column(ForeignKey("users.id"), nullable=True)
 
 

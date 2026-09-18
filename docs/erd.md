@@ -150,6 +150,8 @@ JSON and dedupe keys for idempotent re-runs.
 `ai_query_audit`, `webhook_endpoints`, `webhook_deliveries`,
 `notification_outbox`, `integrations`, `export_jobs` — all live since
 Phase 0 schemas, all now exercised end-to-end (assistant answers + signed
-webhook deliveries + ERP `cpo.erp.v1` exports, Phase 5). Remaining
-planned: provider-config governance connectors, marketplace invoice-sync
-tables (Phase 6+).
+webhook deliveries + ERP `cpo.erp.v1` exports, Phase 5). Phase 7 adds
+`budgets.alert_state` (JSON episode state — breach episodes dedupe alerts
+by design; no new tables) and the `orphan.discovered` webhook event.
+Remaining planned: provider-config governance connectors, marketplace
+invoice-sync tables (deployment/hardening roadmap).
