@@ -123,8 +123,9 @@ Adapter interface (`ingestion/base.py`): discover → fetch manifest → parse
 (streaming) → map to canonical → dedupe (sha256 of semantic identity) →
 quarantine invalid rows → upsert `ProviderBillTotal`. Idempotent by
 `(sha256, parser_version)` file uniqueness; reprocessing writes a NEW pricing
-run and links `supersedes_id`. AWS CUR v1 (CSV/Parquet later) in Phase 1;
-Azure cost exports Phase 3; GCP = interface only.
+run and links `supersedes_id`. AWS CUR v1 (CSV/Parquet later) Phase 1; Azure
+cost-export v1 shipped Phase 3 (synthetic format, same contract; live fetch =
+Phase 5 credentials integration, docs/cloud-connectors.md); GCP = interface only.
 
 ## 8. Performance path
 

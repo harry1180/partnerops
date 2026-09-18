@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.db.rls import set_org_scope
-from app.ingestion.adapters import SyntheticAwsAdapter
+from app.ingestion.adapters import SyntheticAwsAdapter, SyntheticAzureAdapter
 from app.ingestion.base import IngestContext
 from app.models.audit import AuditEvent
 from app.models.billing_core import AccountFamily, CloudAccount, CloudBillingAccount
@@ -42,7 +42,10 @@ from app.models.reconciliation import ProviderBillTotal
 log = get_logger(__name__)
 
 # provider_code, parser_version → adapter factory
-ADAPTERS: dict[tuple[str, int], type] = {("aws", 1): SyntheticAwsAdapter}
+ADAPTERS: dict[tuple[str, int], type] = {
+    ("aws", 1): SyntheticAwsAdapter,
+    ("azure", 1): SyntheticAzureAdapter,
+}
 
 
 @dataclass
@@ -192,6 +195,11 @@ async def ingest_csv(
         "billed": Decimal("0"), "credit": Decimal("0"), "tax": Decimal("0"),
         "support": Decimal("0"), "marketplace": Decimal("0"),
     }
+    # Phase 3: per-cloud-account rollup of exported lines (leg A' of recon:
+    # provider bill totals per account, multi-cloud grain). Enrollment-level
+    # rows (tax/credit with subscription == billing profile) roll up there.
+    per_account_billed: dict[str, Decimal] = {}
+    per_account_currency: dict[str, str] = {}
 
     provider_summary_total: Decimal | None = None
     for d in result.drafts:
@@ -210,6 +218,11 @@ async def ingest_csv(
         totals["tax"] += d.tax
         totals["support"] += d.support_fee
         totals["marketplace"] += d.marketplace_fee
+        # enrollment-scope rows (no linked account) roll up under the payer
+        # leg — the EA billing account is their account grain.
+        acct_key = d.linked_account or d.payer_account or "?"
+        per_account_billed[acct_key] = per_account_billed.get(acct_key, Decimal("0")) + d.provider_billed
+        per_account_currency[acct_key] = d.currency
 
         if d.dedupe_key in seen_dedupe:
             duplicates += 1
@@ -241,10 +254,11 @@ async def ingest_csv(
             await session.flush()  # materialize id for canonical rows
             accounts[d.linked_account] = acct
         if acct is None:
-            unmapped.add(d.linked_account or "?")
+            if d.linked_account:
+                unmapped.add(d.linked_account)
             customer_id = None
             family_id = None
-            row_org_path = org_path
+            row_org_path = org_path  # enrollment-scope: partner-level, not a customer
         else:
             family_id = acct.account_family_id
             customer_id = family_customer.get(family_id) if family_id else None
@@ -293,6 +307,7 @@ async def ingest_csv(
                     ProviderBillTotal.provider_code == provider_code,
                     ProviderBillTotal.billing_account_ref == billing_ref,
                     ProviderBillTotal.period_start == period_start,
+                    ProviderBillTotal.level == "invoice",
                 )
             )
         ).scalar_one_or_none()
@@ -301,6 +316,7 @@ async def ingest_csv(
                 org_path=org_path, provider_code=provider_code,
                 billing_account_ref=billing_ref,
                 period_start=period_start, period_end=period_end, currency="USD",
+                level="invoice",
             )
             session.add(existing_total)
         existing_total.billed_total = (
@@ -311,6 +327,37 @@ async def ingest_csv(
         existing_total.support_total = totals["support"]
         existing_total.marketplace_total = totals["marketplace"]
         existing_total.evidence = {"file_id": str(file.id), "sha256": sha}
+
+    # per-cloud-account bill totals (charter: provider bill totals per
+    # account). These are rollups of THIS file's exported lines — distinct
+    # grain from the invoice-level row above. Enrollment-scope accounts
+    # (their rows land under the same ref as the invoice-level row) are
+    # attributed to the invoice-level total instead: provider_bill_totals
+    # must hold at most one row per (provider, ref, period) on every dialect.
+    for acct_ref, acct_total in per_account_billed.items():
+        if acct_ref == billing_ref:
+            continue
+        pa = (
+            await session.execute(
+                select(ProviderBillTotal).where(
+                    ProviderBillTotal.org_path == org_path,
+                    ProviderBillTotal.provider_code == provider_code,
+                    ProviderBillTotal.billing_account_ref == acct_ref,
+                    ProviderBillTotal.period_start == period_start,
+                    ProviderBillTotal.level == "account",
+                )
+            )
+        ).scalar_one_or_none()
+        if pa is None:
+            pa = ProviderBillTotal(
+                org_path=org_path, provider_code=provider_code,
+                billing_account_ref=acct_ref, period_start=period_start,
+                period_end=period_end, currency=per_account_currency.get(acct_ref, "USD"),
+                level="account",
+            )
+            session.add(pa)
+        pa.billed_total = acct_total
+        pa.evidence = {"file_id": str(file.id), "sha256": sha, "grain": "per-account rollup"}
 
     file.row_count = len(result.drafts) + len(result.issues)
     file.status = "parsed"

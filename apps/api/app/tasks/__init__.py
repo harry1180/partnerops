@@ -18,7 +18,8 @@ celery_app = Celery(
     "cloudpartnerops",
     broker=settings.redis_url,
     backend=settings.database_url.replace("postgresql+psycopg", "db+postgresql+psycopg"),
-    include=["app.tasks.billing", "app.tasks.ingestion", "app.tasks.reports"],
+    include=["app.tasks.billing", "app.tasks.ingestion", "app.tasks.reports",
+             "app.tasks.connectors"],
 )
 
 celery_app.conf.update(
@@ -43,6 +44,10 @@ celery_app.conf.update(
         "scheduled-reports": {
             "task": "app.tasks.reports.run_due_schedules",
             "schedule": 900.0,  # every 15 minutes; due-checking is per schedule
+        },
+        "due-connectors": {
+            "task": "app.tasks.connectors.run_due_connectors",
+            "schedule": 900.0,  # every 15 minutes; due-checking is per connector
         },
     },
 )

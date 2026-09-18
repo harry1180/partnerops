@@ -37,6 +37,7 @@ from app.models.billing_core import (  # noqa: F401
     Subscription,
 )
 from app.models.branding import BrandingConfig  # noqa: F401
+from app.models.connectors import ProviderConnector  # noqa: F401
 from app.models.contracts import (  # noqa: F401
     BillingRule,
     BillingRuleVersion,

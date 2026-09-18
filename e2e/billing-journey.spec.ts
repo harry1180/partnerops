@@ -29,6 +29,7 @@ const RULE_CODE = `E2E-${TAG}`;
 const CONTRACT_CODE = `E2E-${TAG}`;
 const FAMILY_NAME = `E2E Production ${TAG}`;
 const UNMAPPED = "999999999999";
+const AZURE_ORPHAN = "unmapped-0000-4000-8000-000000000099";  // Phase 3 fixture
 
 let msp: ApiCtx;
 let customerId = "";
@@ -86,6 +87,21 @@ test.describe("partner billing journey", () => {
     await expect(row).toBeVisible({ timeout: 15_000 });
     // unmapped on first run; mapped is also acceptable on re-runs (idempotent demo)
     await expect(row.getByText(/unmapped|mapped/i).first()).toBeVisible();
+  });
+
+  test("2b. (Phase 3) Import synthetic Azure billing; orphan subscription surfaces; connectors panel is honest", async ({ page }) => {
+    await uiLogin(page, "msp@northwind-msp.example.com");
+    await page.goto(`${WEB}/cloud-accounts`);
+    await page.getByRole("button", { name: "Import synthetic Azure data" }).click();
+    await expect(page.getByText(/AZURE: \d+ cost records across 3 files/)).toBeVisible({ timeout: 90_000 });
+    const orphan = page.locator("tr", { hasText: AZURE_ORPHAN }).first();
+    await expect(orphan).toBeVisible({ timeout: 20_000 });
+    await expect(orphan.getByText("AZURE").first()).toBeVisible();
+    // connectors panel: seeded, synthetic-mode, no fake live pull
+    await expect(page.getByText("Provider connectors")).toBeVisible({ timeout: 15_000 });
+    const azConn = page.locator("tr", { hasText: "Northwind Azure Cost Export" }).first();
+    await expect(azConn).toBeVisible();
+    await expect(azConn.getByText("no live pull")).toBeVisible();
   });
 
   test("3. Map the discovered account to the new family", async ({ page }) => {

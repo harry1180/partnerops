@@ -14,6 +14,7 @@ from app.api.v1 import (
     benefits_api,
     billing,
     branding,
+    connectors,
     contracts,
     customers,
     extras,
@@ -32,6 +33,7 @@ api_router.include_router(orgs.router, prefix="/orgs", tags=["organizations"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(contracts.router, tags=["contracts"])
 api_router.include_router(billing.router, tags=["billing"])
+api_router.include_router(connectors.router, tags=["connectors"])
 api_router.include_router(margins.router, tags=["margins"])
 api_router.include_router(portal.router, tags=["portal"])
 api_router.include_router(extras.router, tags=["billing-ops"])

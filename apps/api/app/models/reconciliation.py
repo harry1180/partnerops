@@ -39,12 +39,17 @@ class ProviderBillTotal(PkMixin, Base):
 
     __tablename__ = "provider_bill_totals"
     __table_args__ = (
-        UniqueConstraint("org_path", "provider_code", "billing_account_ref", "period_start", name="uq_provider_bill"),
+        UniqueConstraint("org_path", "provider_code", "billing_account_ref", "period_start", "level",
+                         name="uq_provider_bill"),
     )
 
     org_path: Mapped[str] = mapped_column(String(512), nullable=False)
     provider_code: Mapped[str] = mapped_column(String(32), nullable=False)
     billing_account_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    # 'invoice' = the provider's own statement for the billing account (leg A
+    # of three-way recon); 'account' = per-cloud-account rollup of exported
+    # lines (Phase 3 multi-cloud: Azure subscriptions vs the enrollment bill).
+    level: Mapped[str] = mapped_column(String(16), nullable=False, default="invoice")
     period_start = mapped_column(DateTime(timezone=True), nullable=False)
     period_end = mapped_column(DateTime(timezone=True), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")

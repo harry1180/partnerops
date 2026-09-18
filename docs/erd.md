@@ -129,9 +129,17 @@ erDiagram
     USER_MODEL ||--o{ AI_QUERY_AUDIT : ""
 ```
 
+## Phase 3 additions (shipped)
+
+`provider_connectors` — org_path-scoped connector config (provider, billing
+account ref, cadence, last-ingest evidence, FK to the last ingested
+`raw_billing_files` row). `provider_bill_totals` gained `level`
+(invoice|account) for per-cloud-account reconciliation grain.
+`subscriptions`/`resource_groups` (modeled since Phase 0) are now populated
+by the Azure demo seed.
+
 ## Phase 4+ additions (planned, not yet created)
 
 `Budgets`, `Anomalies`, `Recommendations`, `GovernancePolicies`,
-`GovernanceFindings`, `CostAlerts`, `ReportSchedules` — all org_path-scoped,
-all conforming to this soft-delete + audit conventions; see
-IMPLEMENTATION_STATUS.md.
+`GovernanceFindings`, `CostAlerts` — all org_path-scoped, all conforming to
+this soft-delete + audit conventions; see IMPLEMENTATION_STATUS.md.

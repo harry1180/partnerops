@@ -154,10 +154,16 @@ async def test_august_late_adjustment_and_provider_total(client, migrated_db):
         )).scalars())
     assert len(late) == 1
     assert late[0].line_item_type == "adjustment"
-    assert len(totals) == 1
+    # leg-1 invoice-level total is exactly one row; Phase 3 also records
+    # per-account rollups (level='account') which must not pollute leg A.
+    invoice_level = [t for t in totals if t.level == "invoice"]
+    account_level = [t for t in totals if t.level == "account"]
+    assert len(invoice_level) == 1
+    assert len(account_level) >= 5  # 4 linked AWS accounts (+enrollment only in azure grain)
+    assert "?" not in {t.billing_account_ref for t in account_level}  # AWS rows always mapped
     # provider summary row made leg-1 exact: line-sum + 4500.00
     usage_sum = Decimal((await _usage_sum(res.file_id, org_path)) or 0)
-    expected = Decimal(str(totals[0].billed_total))
+    expected = Decimal(str(invoice_level[0].billed_total))
     assert expected - usage_sum == Decimal("4500.000000")
 
 

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/lib/app-state";
 import { api } from "@/lib/api";
-import { loadSynthetic } from "@/lib/billing-api";
+import { loadSynthetic, loadSyntheticAzure, fetchConnectors, runConnector, toggleConnector } from "@/lib/billing-api";
+import type { ConnectorRow } from "@/lib/billing-api";
 import {
   Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, ErrorState, Field,
   Modal, Input, MoneyCell, PageHeader, Pagination, Select, Spinner, Table, TBody, TD, TH, THead, TR,
@@ -25,6 +26,7 @@ export default function CloudAccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const canWrite = me?.permissions.includes("customer.write") ?? false;
+  const canManageIntegrations = me?.permissions.includes("integration.manage") ?? false;
   const [mapTarget, setMapTarget] = useState<AccountRow | null>(null);
 
   const load = useCallback(() => {
@@ -107,6 +109,7 @@ export default function CloudAccountsPage() {
       )}
       {mapTarget && <MapAccountModal account={mapTarget} onClose={() => setMapTarget(null)}
         onDone={() => { setMapTarget(null); load(); }} />}
+      {canManageIntegrations && <ConnectorsPanel />}
     </div>
   );
 }
@@ -176,36 +179,112 @@ function MapAccountModal({ account, onClose, onDone }: {
 
 
 function ImportPanel({ onDone }: { onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"aws" | "azure" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [months, setMonths] = useState("2026-06,2026-07,2026-08");
 
+  async function load(provider: "aws" | "azure") {
+    setBusy(provider); setError(null); setMsg(null);
+    try {
+      const res = provider === "aws" ? await loadSynthetic(months) : await loadSyntheticAzure(months);
+      const r = res.results;
+      setMsg(`${provider.toUpperCase()}: ${r.reduce((a, x) => a + x.canonical, 0)} cost records across ${r.length} files`
+        + (r.some((x) => x.skipped_duplicate_file) ? " (some skipped as already imported)" : "")
+        + (r.some((x) => x.duplicates > 0) ? `; ${r.reduce((a, x) => a + x.duplicates, 0)} duplicates quarantined` : "")
+        + (r.some((x) => x.unmapped_accounts.length) ? `; unmapped: ${[...new Set(r.flatMap((x) => x.unmapped_accounts))].join(", ")}` : ""));
+      onDone();
+    } catch (e) { setError(e instanceof Error ? e.message : "import failed"); }
+    finally { setBusy(null); }
+  }
+
   return (
     <Card className="w-full max-w-md">
       <CardBody>
-        <Field label="Demo billing months" hint="Deterministic synthetic AWS CUR fixtures.">
+        <Field label="Demo billing months" hint="Deterministic synthetic CUR / cost-export fixtures.">
           {(id) => (
             <Input id={id} value={months} onChange={(e) => setMonths(e.target.value)} className="font-mono text-xs" />
           )}
         </Field>
         <div className="mt-2 flex gap-2">
-          <Button size="sm" loading={busy} onClick={async () => {
-            setBusy(true); setError(null); setMsg(null);
-            try {
-              const res = await loadSynthetic(months);
-              const r = res.results;
-              setMsg(`${r.reduce((a, x) => a + x.canonical, 0)} cost records across ${r.length} files`
-                + (r.some((x) => x.skipped_duplicate_file) ? " (some skipped as already imported)" : "")
-                + (r.some((x) => x.duplicates > 0) ? `; ${r.reduce((a, x) => a + x.duplicates, 0)} duplicates quarantined` : "")
-                + (r.some((x) => x.unmapped_accounts.length) ? `; unmapped: ${[...new Set(r.flatMap((x) => x.unmapped_accounts))].join(", ")}` : ""));
-              onDone();
-            } catch (e) { setError(e instanceof Error ? e.message : "import failed"); }
-            finally { setBusy(false); }
-          }}>Import synthetic AWS data</Button>
+          <Button size="sm" loading={busy === "aws"} disabled={busy !== null} onClick={() => load("aws")}>Import synthetic AWS data</Button>
+          <Button size="sm" variant="secondary" loading={busy === "azure"} disabled={busy !== null} onClick={() => load("azure")}>Import synthetic Azure data</Button>
         </div>
         {msg && <p className="mt-2 text-xs text-ink-500">{msg}</p>}
         {error && <p role="alert" className="mt-2 text-xs text-negative">{error}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+
+function ConnectorsPanel() {
+  const [rows, setRows] = useState<ConnectorRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    fetchConnectors().then((r) => setRows(r.items)).catch((e) => setError(String(e?.message ?? e)));
+  }, []);
+  useEffect(load, [load]);
+
+  async function run(c: ConnectorRow) {
+    setBusyId(c.id); setMsg(null);
+    try {
+      // run the latest fixture period; UI shows the honest outcome verbatim
+      const res = await runConnector(c.id, "2026-08");
+      setMsg(res.status === "ingested"
+        ? `${c.name}: ${res.canonical} rows ingested${res.detail?.skipped_duplicate_file ? " (file already present — skipped)" : ""}`
+        : `${c.name}: no fixture for the requested period (live cloud fetch arrives with connector credentials — this is synthetic mode)`);
+    } catch (e) { setMsg(`${c.name}: ${e instanceof Error ? e.message : "run failed"}`); }
+    finally { setBusyId(null); load(); }
+  }
+
+  async function toggle(c: ConnectorRow) {
+    setBusyId(c.id);
+    try { await toggleConnector(c.id, !c.enabled); load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "toggle failed"); }
+    finally { setBusyId(null); }
+  }
+
+  if (error) return <Card className="p-4"><ErrorState detail={error} onRetry={load} /></Card>;
+  if (rows === null) return <Card className="p-4"><Spinner label="Loading connectors" /></Card>;
+
+  return (
+    <Card className="w-full">
+      <CardHeader><CardTitle>Provider connectors</CardTitle></CardHeader>
+      <CardBody className="p-0">
+        <Table>
+          <THead><TR><TH>Connector</TH><TH>Provider</TH><TH>Mode</TH><TH>Cadence</TH><TH>Last ingest</TH><TH>Next due</TH><TH>Enabled</TH><TH /></TR></THead>
+          <TBody>
+            {rows.map((c) => (
+              <TR key={c.id}>
+                <TD>
+                  <span className="font-medium">{c.name}</span>
+                  <span className="ml-2 font-mono text-[10px] text-ink-400">{c.billing_account_ref}</span>
+                </TD>
+                <TD><Badge tone="neutral">{c.provider.toUpperCase()}</Badge></TD>
+                <TD className="text-xs">{c.mode === "synthetic" ? "synthetic fixtures" : c.mode}
+                  {!c.fetch_available && <span className="ml-1 text-[10px] text-ink-400">(no live pull)</span>}
+                </TD>
+                <TD className="text-xs">{c.cadence === "monthly" ? `Monthly, day ${c.day_of_month} ${String(c.hour_utc).padStart(2, "0")}:00 UTC` : "Weekly, midweek"}</TD>
+                <TD className="text-xs">{c.last_ingest_at ? new Date(c.last_ingest_at).toLocaleString() : <span className="text-ink-400">never</span>}</TD>
+                <TD className="text-xs">{c.next_due_at ? new Date(c.next_due_at).toLocaleDateString() : "—"}{c.due_now && <Badge tone="warning">due</Badge>}</TD>
+                <TD><Badge tone={c.enabled ? "positive" : "neutral"}>{c.enabled ? "on" : "off"}</Badge></TD>
+                <TD className="text-right whitespace-nowrap">
+                  <Button size="sm" variant="ghost" disabled={busyId === c.id} onClick={() => run(c)}>Run now</Button>
+                  <Button size="sm" variant="ghost" disabled={busyId === c.id} onClick={() => toggle(c)}>{c.enabled ? "Disable" : "Enable"}</Button>
+                </TD>
+              </TR>
+            ))}
+            {rows.length === 0 && (
+              <TR><TD colSpan={8} className="py-4 text-center text-xs text-ink-400">No connectors configured. AWS/Azure data flows through manual import or synthetic loads until a connector is added.</TD></TR>
+            )}
+          </TBody>
+        </Table>
+        {msg && <p className="border-t border-line px-3 py-2 text-xs text-ink-500">{msg}</p>}
       </CardBody>
     </Card>
   );

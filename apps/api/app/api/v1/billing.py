@@ -60,13 +60,11 @@ async def _owner_org_for_upload(session: AsyncSession, principal: Principal) -> 
 
 # ------------------------------------------------------------------ ingest
 
-@router.post("/ingestion/aws/upload", status_code=201, dependencies=[CSRF])
-async def upload_aws_file(
-    session: SessionDep,
-    principal: Principal,
-    file: UploadFile = File(...),
-    object_prefix: str = Form("raw/aws/upload"),
-):
+async def _ingest_upload(
+    session: AsyncSession, principal: Principal, file: UploadFile,
+    object_prefix: str, provider_code: str,
+) -> dict:
+    """Shared body for /ingestion/{provider}/upload."""
     if not principal.can("customer.write"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": "forbidden"})
     org_id, org_path = await _owner_org_for_upload(session, principal)
@@ -91,9 +89,9 @@ async def upload_aws_file(
     sha256 = hashlib.sha256(content).hexdigest()
 
     summary = await ingest_service.ingest_csv(
-        session, org_id=org_id, org_path=org_path, provider_code="aws",
+        session, org_id=org_id, org_path=org_path, provider_code=provider_code,
         parser_version=1, filename=file.filename or "file.csv",
-        body=content, object_key=stored_key, source="manual_upload",
+        body=content, object_key=stored_key, source=f"{provider_code}_manual_upload",
         correlation_id=correlation_id_var_safe(), actor_user_id=principal.user_id,
     )
     return {
@@ -104,6 +102,26 @@ async def upload_aws_file(
         "skipped_duplicate_file": summary.skipped_duplicate_file,
         "sha256": sha256[:16],
     }
+
+
+@router.post("/ingestion/aws/upload", status_code=201, dependencies=[CSRF])
+async def upload_aws_file(
+    session: SessionDep,
+    principal: Principal,
+    file: UploadFile = File(...),
+    object_prefix: str = Form("raw/aws/upload"),
+):
+    return await _ingest_upload(session, principal, file, object_prefix, "aws")
+
+
+@router.post("/ingestion/azure/upload", status_code=201, dependencies=[CSRF])
+async def upload_azure_file(
+    session: SessionDep,
+    principal: Principal,
+    file: UploadFile = File(...),
+    object_prefix: str = Form("raw/azure/upload"),
+):
+    return await _ingest_upload(session, principal, file, object_prefix, "azure")
 
 
 @router.post("/ingestion/synthetic/load", status_code=201, dependencies=[CSRF])
@@ -132,6 +150,42 @@ async def load_synthetic(
             parser_version=1, filename=f"{label}.csv",
             body=months_data[label].encode(),
             object_key=f"fixtures/aws/777700000001/{label}.csv",
+            source="synthetic", correlation_id=correlation_id_var_safe(),
+            actor_user_id=principal.user_id,
+        )
+        results.append({
+            "month": label, "file_id": str(summary.file_id), "status": summary.status,
+            "canonical": summary.canonical, "duplicates": summary.duplicates,
+            "quarantined": summary.quarantined,
+            "unmapped_accounts": summary.unmapped_accounts,
+            "skipped_duplicate_file": summary.skipped_duplicate_file,
+        })
+    return {"results": results}
+
+
+@router.post("/ingestion/synthetic/azure/load", status_code=201, dependencies=[CSRF])
+async def load_synthetic_azure(
+    session: SessionDep,
+    principal: Principal,
+    months: str | None = Form(None),
+):
+    """Load the deterministic Azure fixtures (see synthetic_azure.py)."""
+    if not principal.can("customer.write"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": "forbidden"})
+    org_id, org_path = await _owner_org_for_upload(session, principal)
+    from app.ingestion.synthetic_azure import BILLING_PROFILE, build_all
+
+    months_data = build_all()[BILLING_PROFILE]
+    wanted = [m.strip() for m in months.split(",")] if months else sorted(months_data)
+    results = []
+    for label in wanted:
+        if label not in months_data:
+            raise HTTPException(400, detail={"code": "bad_month", "value": label})
+        summary = await ingest_service.ingest_csv(
+            session, org_id=org_id, org_path=org_path, provider_code="azure",
+            parser_version=1, filename=f"{label}.csv",
+            body=months_data[label].encode(),
+            object_key=f"fixtures/azure/{BILLING_PROFILE}/{label}.csv",
             source="synthetic", correlation_id=correlation_id_var_safe(),
             actor_user_id=principal.user_id,
         )
@@ -418,6 +472,32 @@ async def create_recon_run(body: ReconRequest, session: SessionDep, principal: P
     )
     return {"run_id": str(result.run_id), "exceptions_open": result.exceptions_open,
             "material_open": result.material_open, "summary": result.summary}
+
+
+@router.get("/reconciliation/bill-totals")
+async def list_bill_totals(session: SessionDep, principal: Principal,
+                           period_start: datetime | None = None):
+    """Provider bill totals in scope: invoice-level statements plus the
+    per-cloud-account rollups recorded at ingestion (Phase 3 grain)."""
+    if not principal.can("recon.read"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail={"code": "forbidden"})
+    from app.models.reconciliation import ProviderBillTotal
+
+    root = principal.scope_prefixes[0]
+    stmt = select(ProviderBillTotal).where(ProviderBillTotal.org_path.like(root + "%"))
+    if period_start:
+        stmt = stmt.where(ProviderBillTotal.period_start == period_start)
+    rows = (await session.execute(
+        stmt.order_by(ProviderBillTotal.period_start.desc(),
+                      ProviderBillTotal.provider_code, ProviderBillTotal.level)
+        .limit(300))).scalars().all()
+    return {"items": [{
+        "id": str(t.id), "provider": t.provider_code, "level": t.level,
+        "billing_account_ref": t.billing_account_ref,
+        "period_start": t.period_start.isoformat(),
+        "billed_total": str(t.billed_total), "currency": t.currency,
+        "evidence": t.evidence,
+    } for t in rows]}
 
 
 @router.get("/reconciliation/exceptions")

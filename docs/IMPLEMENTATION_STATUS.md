@@ -1,7 +1,7 @@
 # Implementation Status
 
 Working source of truth for what is verified. Updated at every phase gate.
-Last update: Phase 1 — **complete** (journey 13 passed / 1 skipped-by-design; see docs/reports/phase-1-report.md).
+Last update: Phase 3 — **complete** (see docs/reports/phase-3-report.md).
 
 ## Phase 0 — Foundation ✅ COMPLETE
 
@@ -79,7 +79,8 @@ synthetic AWS CUR → normalization → allocation → contracts → rules → p
    exercised by the demo dataset's contract.
 4. Multi-currency: mismatched-currency rows are quarantined, not converted
    (`currency_conversion` rule reserved for a later phase).
-5. Azure adapter: interface + planned provider row only (Phase 3).
+5. Azure adapter: shipped in Phase 3 (synthetic clean-room export format;
+   live fetch is a Phase 5 credentials integration).
 6. PDF invoices are generated with a minimal internal writer (no external
    service); rich layout is a later phase.
 7. Windows dev quirks: run API via `run_server.py` (Selector loop); don't run
@@ -138,8 +139,44 @@ Verification (2026-09-17):
   documented bypass scope for the cross-tenant due pass, then bind each
   schedule's own org scope for generation (same pattern as the seed script).
 
-## Next: Phase 3 — Multi-cloud ingestion
+## Phase 3 — Azure and multi-cloud ingestion (COMPLETE)
 
-Azure Cost Management + GCP Billing BigQuery adapters behind the same
-ingestion contract, connector scheduling, file-format fuzz tests, provider
-bill totals reconciliation per account.
+Shipped:
+
+- **Azure adapter** behind the same ingestion contract as AWS (clean-room
+  synthetic export format, deterministic 3-month fixtures: subscriptions +
+  resource groups, reservations, EA credit + refund, planted duplicate,
+  orphan subscription, +$180 true-up, late adjustment).
+- **Multi-cloud per customer**: demo customers now carry AWS accounts *and*
+  Azure subscriptions; pricing runs and invoice lineage aggregate both
+  providers (lineage verified via `/invoices/{id}/lineage`).
+- **Provider bill totals per account** (`level` = invoice|account; recon
+  leg A stays invoice-level — no double count) + `/reconciliation/bill-totals`.
+- **Connector scheduling**: `provider_connectors` (RLS), API CRUD-lite +
+  run/toggle gated on `integration.manage`, Celery beat every 15 min with
+  bypass-discovery + per-org scope, audited lifecycle. Synthetic mode only —
+  `fetch_available=false` reported honestly end-to-end (ADR-0016); no fake
+  pull buttons.
+- **UI**: Azure import button + connectors panel on Cloud Accounts;
+  `CURRENT_PHASE=3`; nav honesty maintained (Integrations page = Phase 5).
+
+Verification (2026-09-17):
+
+- `ruff` clean; `mypy` clean (81 files); `pytest` **100 passed** incl. new
+  `test_azure_ingestion.py` (13, with 2 hypothesis fuzz: no-crash + no
+  silent drops + Decimal round-trip) and `test_phase3_connectors.py` (6);
+  PostgreSQL RLS suite **6 passed** against live PG 16 after fresh migrate.
+- Live smokes: phase 1 **SMOKE_OK** · phase 2 **SMOKE2_OK** · **NEW**
+  `smoke_phase3_live.py` **SMOKE3_OK** (22 steps incl. merged recon delta
+  4680.00 = AWS 4500 ⊕ Azure 180 and dual-provider lineage).
+- Playwright journey **14 passed, 1 skipped** (assistant = Phase 5), new
+  step 2b (Azure import, orphan discovery, honest connector panel), run
+  twice consecutively.
+- `pnpm typecheck` 0 errors; vitest 8; `next build` clean.
+
+## Next: Phase 4 — FinOps & governance
+
+Budgets, forecasts, statistical anomaly detection with configurable
+thresholds, optimization recommendations (rightsizing, idle resources),
+savings tracking, tag compliance, governance policy engine (findings,
+exceptions, remediation guidance).

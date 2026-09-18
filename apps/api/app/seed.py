@@ -169,13 +169,15 @@ async def seed() -> dict:
             CloudBillingAccount,
             CloudProvider,
             Customer,
+            ResourceGroup,
+            Subscription,
         )
 
         session.add_all([
             CloudProvider(code="aws", display_name="Amazon Web Services",
                           adapter_key="synthetic_aws", status="available"),
             CloudProvider(code="azure", display_name="Microsoft Azure",
-                          adapter_key="azure_cost_export", status="planned"),
+                          adapter_key="synthetic_azure", status="available"),
             CloudProvider(code="gcp", display_name="Google Cloud",
                           adapter_key="gcp_billing", status="planned"),
         ])
@@ -204,6 +206,19 @@ async def seed() -> dict:
              ["555555555555"]),
             ("44444444-4444-4444-8444-444444444446", msp_ca_path, "EVRG", "Evergreen Retail", []),
         ]
+        # Phase 3: Azure subscriptions (multi-cloud per customer). The ACME/BLUR
+        # subscription ids match fixtures/azure; the unmapped one deliberately
+        # does not exist in the console until discovery surfaces it.
+        azure_subs = {
+            "44444444-4444-4444-8444-444444444441": [  # ACME
+                ("aaaaaaaa-1111-4111-8111-111111111111", "sub-payments-prod", "rg-payments-prod"),
+                ("aaaaaaaa-2222-4222-8222-222222222222", "sub-payments-nonprod", "rg-payments-nonprod"),
+            ],
+            "44444444-4444-4444-8444-444444444442": [  # BLUR
+                ("aaaaaaaa-3333-4333-8333-333333333333", "sub-data-analytics", "rg-data-analytics"),
+            ],
+        }
+        from app.ingestion.synthetic_azure import BILLING_PROFILE as AZURE_PROFILE
         payer = CloudBillingAccount(
             org_id=msp_nw_id, org_path=msp_nw_path, provider_code="aws",
             external_id="777700000001", display_name="Northwind AWS Payer",
@@ -212,6 +227,13 @@ async def seed() -> dict:
         session.add(payer)
         await session.flush()
         payer_id = payer.id
+        azure_billing = CloudBillingAccount(
+            org_id=msp_nw_id, org_path=msp_nw_path, provider_code="azure",
+            external_id=AZURE_PROFILE, display_name="Northwind EA Enrollment",
+            invoice_prefix="AZ", currency="USD",
+        )
+        session.add(azure_billing)
+        await session.flush()
 
         for cust_org_str, parent_path, code, name, linked in cust_specs:
             cust_org_id = uuid.UUID(cust_org_str)
@@ -240,7 +262,56 @@ async def seed() -> dict:
                     org_id=cust.org_id, org_path=cust_path,
                     account_kind="member",
                 ))
+            for sub_ext, sub_name, rg_name in azure_subs.get(cust_org_str, []):
+                sub_acct = CloudAccount(
+                    provider_code="azure", external_id=sub_ext,
+                    display_name=f"Azure {sub_name}",
+                    billing_account_id=azure_billing.id, account_family_id=fam.id,
+                    allocation_status="mapped",
+                    org_id=cust.org_id, org_path=cust_path,
+                    account_kind="subscription",
+                )
+                session.add(sub_acct)
+                await session.flush()
+                sub = Subscription(
+                    cloud_account_id=sub_acct.id, external_id=sub_ext,
+                    display_name=sub_name, org_id=cust.org_id, org_path=cust_path,
+                )
+                session.add(sub)
+                await session.flush()
+                session.add(ResourceGroup(
+                    subscription_id=sub.id, name=rg_name,
+                    org_id=cust.org_id, org_path=cust_path,
+                ))
         # one mapped-but-billing-orphan account under Cascade for future tests
+        await session.flush()
+
+        # Phase 3: synthetic connectors for both demo billing relationships.
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        from app.models.connectors import ProviderConnector as _PConn
+        from app.services.connectors import connector_schedule_row as _row
+        from app.services.schedules import compute_next_run as _cnr
+
+        _now = _dt.now(_UTC)
+        for conn in (
+            _PConn(
+                org_id=msp_nw_id, org_path=msp_nw_path, name="Northwind AWS CUR",
+                provider_code="aws", connector_kind="aws_cur", mode="synthetic",
+                cadence="monthly", day_of_month=3,
+                hour_utc=6, enabled=True,
+                billing_account_ref="777700000001",
+            ),
+            _PConn(
+                org_id=msp_nw_id, org_path=msp_nw_path, name="Northwind Azure Cost Export",
+                provider_code="azure", connector_kind="azure_cost_export", mode="synthetic",
+                cadence="monthly", day_of_month=3, hour_utc=6, enabled=True,
+                billing_account_ref=AZURE_PROFILE,
+            ),
+        ):
+            conn.next_due_at = _cnr(_row(conn), after=_now)
+            session.add(conn)
         await session.flush()
 
         # branding: platform root defaults

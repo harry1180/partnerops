@@ -133,6 +133,29 @@ export const loadSynthetic = (months: string) =>
     unmapped_accounts: string[]; skipped_duplicate_file: boolean; file_id: string; status: string }[] }>(
     "/api/v1/ingestion/synthetic/load", new URLSearchParams({ months }));
 
+export const loadSyntheticAzure = (months: string) =>
+  api.postForm<{ results: { month: string; canonical: number; duplicates: number; quarantined: number;
+    unmapped_accounts: string[]; skipped_duplicate_file: boolean; file_id: string; status: string }[] }>(
+    "/api/v1/ingestion/synthetic/azure/load", new URLSearchParams({ months }));
+
+/* ---------- connectors (Phase 3) ---------- */
+
+export interface ConnectorRow {
+  id: string; name: string; provider: string; kind: string; mode: string;
+  billing_account_ref: string; cadence: string; enabled: boolean;
+  day_of_month: number; hour_utc: number;
+  fetch_available: boolean; last_ingest_at: string | null;
+  last_file_id: string | null; next_due_at: string | null;
+  due_now: boolean; config: Record<string, unknown>;
+}
+export const fetchConnectors = () =>
+  api.get<{ items: ConnectorRow[] }>("/api/v1/connectors");
+export const runConnector = (id: string, period: string) =>
+  api.post<{ connector_id: string; status: string; file_id: string | null; canonical: number;
+    detail: Record<string, unknown> | null }>(`/api/v1/connectors/${id}/run`, { period });
+export const toggleConnector = (id: string, enabled: boolean) =>
+  api.post<{ id: string; enabled: boolean }>(`/api/v1/connectors/${id}/toggle?enabled=${enabled}`, {});
+
 export interface UsageGroup { group: string; provider_cost: string; list_cost: string; credit: string; rows: number }
 export const fetchUsage = (groupBy: string, periodStart?: string, page = 1) => {
   const qs = new URLSearchParams({ group_by: groupBy, page: String(page), page_size: "20" });

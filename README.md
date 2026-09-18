@@ -118,6 +118,7 @@ make up / make down # compose lifecycle
 - [docs/security-and-tenant-isolation.md](docs/security-and-tenant-isolation.md)
 - [docs/demo-credentials.md](docs/demo-credentials.md) — local demo accounts
 - docs/billing-engine.md, invoice-lifecycle.md, reconciliation.md — Phase 1 deliverables
+- [docs/cloud-connectors.md](docs/cloud-connectors.md) — ingestion contract, AWS/Azure formats, connectors (Phase 3)
 - [docs/security-and-tenant-isolation.md](docs/security-and-tenant-isolation.md) — security model
 - [docs/runbook.md](docs/runbook.md) — operations runbook *(grows per phase)*
 - [docs/demo-script.md](docs/demo-script.md) — demonstration walkthrough *(Phase 1)*
@@ -129,7 +130,7 @@ make up / make down # compose lifecycle
 | 0 | Foundation: monorepo, compose, DB+RLS, auth/RBAC, tenant hierarchy, navigation, design system, logging, health, seed, CI | **Complete** |
 | 1 | Working AWS billing MVP: CUR import → canonical model → contracts → rules → pricing → invoices (PDF/CSV) → reconciliation → margins → audit → customer portal → e2e tests | **Complete** (see docs/IMPLEMENTATION_STATUS.md) |
 | 2 | Advanced billing ops: tiers, commitments/credits allocation, maker-checker, notes, disputes, period close, leakage, scheduled reports, white-label | **Complete** (see docs/reports/phase-2-report.md) |
-| 3 | Azure & multi-cloud adapter | Planned |
+| 3 | Azure & multi-cloud adapter | **Complete** (see docs/reports/phase-3-report.md) |
 | 4 | FinOps: budgets, forecasts, anomalies, optimization, governance | Planned |
 | 5 | AI PartnerOps assistant + integrations/webhooks/ERP exports | Planned |
 | 6 | Production hardening | Planned |

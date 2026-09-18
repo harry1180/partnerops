@@ -84,6 +84,24 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
 16. **Administration → Branding**: change the partner's colors/name —
     `branding.updated` is audited; the customer portal inherits it.
 
+## Act 4c — Multi-cloud ingestion (Phase 3)
+
+17. **Cloud Accounts → Import synthetic Azure data**: the same org now
+    carries Azure subscriptions alongside AWS accounts. The import ingests
+    3 months of clean-room cost-export fixtures through the *identical*
+    pipeline (sha256 files → adapter → canonical rows → per-account bill
+    totals). An orphan subscription the partner forgot about auto-appears
+    as unmapped — the #1 unbilled-usage source — and reconciliation reports
+    the enrollment's off-line true-up delta alongside the AWS one.
+18. **Provider connectors panel**: AWS CUR + Azure Cost Export connectors,
+    each showing mode (`synthetic fixtures`), cadence, last real ingestion
+    (backed by an actual file row), next-due timestamp, and Run now. The
+    "(no live pull)" label is the honesty marker: live credential fetching
+    is Phase 5; nothing here pretends to reach a cloud.
+19. **BlueRiver invoice → lineage**: one customer invoice mixes EC2 and
+    Azure VM charges; the lineage view traces each line back to source
+    records in *both* provider files.
+
 ## The isolation punchline
 
 13. Sign in as **Casey Cascade** (`msp@cascade-it.example.com`, the other
@@ -96,5 +114,8 @@ Prereqs: `make up` (or docker compose for postgres/redis/minio), API on
 - Full API-level workflow: `apps/api` → `python tools/smoke_phase1_live.py`
 - Phase 2 ops workflow: `python tools/smoke_phase2_live.py` (notes, waiver →
   approve → close, credits, commitments, leakage, report exports, branding)
+- Phase 3 multi-cloud workflow: `python tools/smoke_phase3_live.py` (Azure
+  connector run, orphan discovery, per-account bill totals, merged recon
+  delta, multi-cloud pricing + lineage)
 - Browser journey (this script as a test): `npx playwright test`
 - Golden numbers: `python -m pytest tests/test_golden_billing.py -q`

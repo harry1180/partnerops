@@ -88,12 +88,14 @@ async def run_reconciliation(
             evidence=evidence,
         ))
 
-    # A. provider bill totals
+    # A. provider bill totals (invoice level only; per-account rollups are a
+    # distinct grain Phase 3 added and must not double-count into leg A)
     bills = list((
         await session.execute(
             select(ProviderBillTotal).where(
                 ProviderBillTotal.org_path == org_path,
                 ProviderBillTotal.period_start == period_start,
+                ProviderBillTotal.level == "invoice",
             )
         )
     ).scalars())
